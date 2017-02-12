@@ -1,0 +1,6 @@
+BasedOnStyle: LLVM
+AllowShortFunctionsOnASingleLine: Empty
+AlwaysBreakAfterReturnType: All
+PointerAlignment: Left
+SpaceAfterCStyleCast: true
+TabWidth: 2
