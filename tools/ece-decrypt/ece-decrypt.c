@@ -42,7 +42,8 @@ main(int argc, char** argv) {
     fprintf(stderr, "Error: Failed to Base64url-decode message: %d\n", err);
     goto end;
   }
-  err = ece_decrypt_aes128gcm(rawRecvPrivKey, authSecret, payload, &plaintext);
+  err =
+      ece_decrypt_aes128gcm(&rawRecvPrivKey, &authSecret, &payload, &plaintext);
   if (err) {
     fprintf(stderr, "Error: Failed to decrypt message: %d\n", err);
     goto end;

@@ -35,11 +35,8 @@ ece_write_uint48_be(uint8_t* bytes, uint64_t value) {
 
 // HKDF from RFC 5869: `HKDF-Expand(HKDF-Extract(salt, ikm), info, length)`.
 static int
-ece_hkdf_sha256(const ece_buf_t salt, const ece_buf_t ikm, const ece_buf_t info,
-                size_t length, ece_buf_t* result) {
-  if (!result) {
-    return ECE_ERROR_NULL_POINTER;
-  }
+ece_hkdf_sha256(const ece_buf_t* salt, const ece_buf_t* ikm,
+                const ece_buf_t* info, size_t outputLength, ece_buf_t* result) {
   ece_buf_reset(result);
 
   int err = ECE_OK;
@@ -56,24 +53,24 @@ ece_hkdf_sha256(const ece_buf_t salt, const ece_buf_t ikm, const ece_buf_t info,
     err = ECE_ERROR_HKDF;
     goto error;
   }
-  if (EVP_PKEY_CTX_set1_hkdf_salt(ctx, salt.bytes, salt.length) <= 0) {
+  if (EVP_PKEY_CTX_set1_hkdf_salt(ctx, salt->bytes, salt->length) <= 0) {
     err = ECE_ERROR_HKDF;
     goto error;
   }
-  if (EVP_PKEY_CTX_set1_hkdf_key(ctx, ikm.bytes, ikm.length) <= 0) {
+  if (EVP_PKEY_CTX_set1_hkdf_key(ctx, ikm->bytes, ikm->length) <= 0) {
     err = ECE_ERROR_HKDF;
     goto error;
   }
-  if (EVP_PKEY_CTX_add1_hkdf_info(ctx, info.bytes, info.length) <= 0) {
+  if (EVP_PKEY_CTX_add1_hkdf_info(ctx, info->bytes, info->length) <= 0) {
     err = ECE_ERROR_HKDF;
     goto error;
   }
-  if (!ece_buf_alloc(result, length)) {
+  if (!ece_buf_alloc(result, outputLength)) {
     err = ECE_ERROR_OUT_OF_MEMORY;
     goto error;
   }
   if (EVP_PKEY_derive(ctx, result->bytes, &result->length) <= 0 ||
-      result->length != length) {
+      result->length != outputLength) {
     err = ECE_ERROR_HKDF;
     goto error;
   }
@@ -90,7 +87,7 @@ end:
 // Inflates a raw ECDH private key into an OpenSSL `EC_KEY` containing the
 // receiver's private and public keys. Returns `NULL` on error.
 static EC_KEY*
-ece_import_receiver_private_key(const ece_buf_t rawKey) {
+ece_import_receiver_private_key(const ece_buf_t* rawKey) {
   EC_KEY* key = NULL;
   EC_POINT* pubKeyPt = NULL;
 
@@ -98,7 +95,7 @@ ece_import_receiver_private_key(const ece_buf_t rawKey) {
   if (!key) {
     goto error;
   }
-  if (EC_KEY_oct2priv(key, rawKey.bytes, rawKey.length) <= 0) {
+  if (EC_KEY_oct2priv(key, rawKey->bytes, rawKey->length) <= 0) {
     goto error;
   }
   const EC_GROUP* group = EC_KEY_get0_group(key);
@@ -133,12 +130,12 @@ end:
 // Inflates a raw ECDH public key into an `EC_KEY` containing the sender's
 // public key. Returns `NULL` on error.
 static EC_KEY*
-ece_import_sender_public_key(const ece_buf_t rawKey) {
+ece_import_sender_public_key(const ece_buf_t* rawKey) {
   EC_KEY* key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
   if (!key) {
     return NULL;
   }
-  if (!EC_KEY_oct2key(key, rawKey.bytes, rawKey.length, NULL)) {
+  if (!EC_KEY_oct2key(key, rawKey->bytes, rawKey->length, NULL)) {
     EC_KEY_free(key);
     return NULL;
   }
@@ -150,9 +147,9 @@ ece_import_sender_public_key(const ece_buf_t rawKey) {
 // to derive the AES decryption key and nonce. Returns `ECE_OK` on success, or
 // an error code otherwise.
 static int
-ece_derive_webpush_secret(const ece_buf_t rawRecvPubKey,
-                          const ece_buf_t rawSenderPubKey,
-                          const ece_buf_t authSecret, ece_buf_t* secret) {
+ece_derive_webpush_secret(const ece_buf_t* rawRecvPubKey,
+                          const ece_buf_t* rawSenderPubKey,
+                          const ece_buf_t* authSecret, ece_buf_t* secret) {
   int err = ECE_OK;
 
   EC_KEY* recvPrivKey = NULL;
@@ -254,7 +251,7 @@ ece_derive_webpush_secret(const ece_buf_t rawRecvPubKey,
 
   // Finally, we invoke HKDF, using the authentication secret as the salt, the
   // shared secret as the IKM, and our info string.
-  err = ece_hkdf_sha256(authSecret, ikm, info, ECE_SHA_256_LENGTH, secret);
+  err = ece_hkdf_sha256(authSecret, &ikm, &info, ECE_SHA_256_LENGTH, secret);
 
 end:
   EC_KEY_free(recvPrivKey);
@@ -267,34 +264,37 @@ end:
 // Derives the AES decryption key and nonce given the receiver private key,
 // sender public key, authentication secret, and sender salt.
 static int
-ece_derive_key_and_nonce(const ece_buf_t rawRecvPubKey,
-                         const ece_buf_t rawSenderPubKey,
-                         const ece_buf_t authSecret, const ece_buf_t salt,
+ece_derive_key_and_nonce(const ece_buf_t* rawRecvPubKey,
+                         const ece_buf_t* rawSenderPubKey,
+                         const ece_buf_t* authSecret, const ece_buf_t* salt,
                          ece_buf_t* key, ece_buf_t* nonce) {
   ece_buf_t secret;
   ece_buf_reset(&secret);
+
   int err = ece_derive_webpush_secret(rawRecvPubKey, rawSenderPubKey,
                                       authSecret, &secret);
   if (err) {
-    return err;
+    goto end;
   }
   uint8_t keyInfoBytes[ECE_KEY_INFO_LENGTH];
   memcpy(keyInfoBytes, ECE_KEY_INFO, ECE_KEY_INFO_LENGTH);
-  err = ece_hkdf_sha256(salt, secret,
-                        ece_buf_adopt(keyInfoBytes, ECE_KEY_INFO_LENGTH),
-                        ECE_KEY_LENGTH, key);
+  ece_buf_t keyInfo = {.bytes = keyInfoBytes, .length = ECE_KEY_INFO_LENGTH};
+  err = ece_hkdf_sha256(salt, &secret, &keyInfo, ECE_KEY_LENGTH, key);
   if (err) {
-    return err;
+    goto end;
   }
   uint8_t nonceInfoBytes[ECE_NONCE_INFO_LENGTH];
   memcpy(nonceInfoBytes, ECE_NONCE_INFO, ECE_NONCE_INFO_LENGTH);
-  err = ece_hkdf_sha256(salt, secret,
-                        ece_buf_adopt(nonceInfoBytes, ECE_NONCE_INFO_LENGTH),
-                        ECE_NONCE_LENGTH, nonce);
+  ece_buf_t nonceInfo = {.bytes = nonceInfoBytes,
+                         .length = ECE_NONCE_INFO_LENGTH};
+  err = ece_hkdf_sha256(salt, &secret, &nonceInfo, ECE_NONCE_LENGTH, nonce);
   if (err) {
-    return err;
+    goto end;
   }
-  return ECE_OK;
+
+end:
+  ece_buf_free(&secret);
+  return err;
 }
 
 // Generates a 96-bit IV for decryption, 48 bits of which are populated.
@@ -312,8 +312,8 @@ ece_generate_iv(uint8_t* nonce, uint64_t counter, uint8_t* iv) {
 
 // Converts an encrypted record to a decrypted block.
 static int
-ece_decrypt_record(const ece_buf_t key, const ece_buf_t nonce, size_t counter,
-                   const ece_buf_t record, bool isLastRecord,
+ece_decrypt_record(const ece_buf_t* key, const ece_buf_t* nonce, size_t counter,
+                   const ece_buf_t* record, bool isLastRecord,
                    ece_buf_t* block) {
   int err = ECE_OK;
 
@@ -324,20 +324,21 @@ ece_decrypt_record(const ece_buf_t key, const ece_buf_t nonce, size_t counter,
   }
   // Generate the IV for this record using the nonce.
   uint8_t iv[ECE_NONCE_LENGTH];
-  ece_generate_iv(nonce.bytes, counter, iv);
-  if (EVP_DecryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key.bytes, iv) <= 0) {
+  ece_generate_iv(nonce->bytes, counter, iv);
+  if (EVP_DecryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key->bytes, iv) <= 0) {
     err = ECE_ERROR_DECRYPT;
     goto end;
   }
   // The authentication tag is included at the end of the encrypted record.
   if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, ECE_TAG_LENGTH,
-                          &record.bytes[record.length - ECE_TAG_LENGTH]) <= 0) {
+                          &record->bytes[record->length - ECE_TAG_LENGTH]) <=
+      0) {
     err = ECE_ERROR_DECRYPT;
     goto end;
   }
   int blockLength = 0;
-  if (EVP_DecryptUpdate(ctx, block->bytes, &blockLength, record.bytes,
-                        record.length - ECE_TAG_LENGTH) <= 0 ||
+  if (EVP_DecryptUpdate(ctx, block->bytes, &blockLength, record->bytes,
+                        record->length - ECE_TAG_LENGTH) <= 0 ||
       blockLength < 0) {
     err = ECE_ERROR_DECRYPT;
     goto end;
@@ -350,11 +351,11 @@ ece_decrypt_record(const ece_buf_t key, const ece_buf_t nonce, size_t counter,
   }
   block->length = blockLength + finalLength;
 
-  // Remove trailing padding.
   if (!block->length) {
     err = ECE_ERROR_ZERO_PLAINTEXT;
     goto end;
   }
+  // Remove trailing padding.
   while (block->length > 0) {
     block->length--;
     if (!block->bytes[block->length]) {
@@ -379,40 +380,41 @@ end:
 }
 
 int
-ece_decrypt_aes128gcm(const ece_buf_t rawRecvPubKey, const ece_buf_t authSecret,
-                      const ece_buf_t payload, ece_buf_t* plaintext) {
+ece_decrypt_aes128gcm(const ece_buf_t* rawRecvPubKey,
+                      const ece_buf_t* authSecret, const ece_buf_t* payload,
+                      ece_buf_t* plaintext) {
   int err = ECE_OK;
 
-  if (!plaintext) {
-    return ECE_ERROR_NULL_POINTER;
-  }
   ece_buf_reset(plaintext);
   ece_buf_t key;
   ece_buf_reset(&key);
   ece_buf_t nonce;
   ece_buf_reset(&nonce);
 
-  if (payload.length < ECE_HEADER_SIZE) {
+  if (payload->length < ECE_HEADER_SIZE) {
     err = ECE_ERROR_SHORT_HEADER;
     goto error;
   }
-  ece_buf_t salt = ece_buf_slice(&payload, 0, ECE_KEY_LENGTH);
-  uint32_t rs = ece_read_uint32_be(&payload.bytes[ECE_KEY_LENGTH]);
-  uint8_t keyIdLength = payload.bytes[ECE_KEY_LENGTH + 4];
-  if (payload.length < ECE_HEADER_SIZE + keyIdLength) {
+  ece_buf_t salt;
+  ece_buf_slice(payload, 0, ECE_KEY_LENGTH, &salt);
+  uint32_t rs = ece_read_uint32_be(&payload->bytes[ECE_KEY_LENGTH]);
+  uint8_t keyIdLength = payload->bytes[ECE_KEY_LENGTH + 4];
+  if (payload->length < ECE_HEADER_SIZE + keyIdLength) {
     err = ECE_ERROR_SHORT_HEADER;
     goto error;
   }
-  ece_buf_t rawSenderPubKey =
-      ece_buf_slice(&payload, ECE_HEADER_SIZE, ECE_HEADER_SIZE + keyIdLength);
-  ece_buf_t ciphertext =
-      ece_buf_slice(&payload, ECE_HEADER_SIZE + keyIdLength, payload.length);
+  ece_buf_t rawSenderPubKey;
+  ece_buf_slice(payload, ECE_HEADER_SIZE, ECE_HEADER_SIZE + keyIdLength,
+                &rawSenderPubKey);
+  ece_buf_t ciphertext;
+  ece_buf_slice(payload, ECE_HEADER_SIZE + keyIdLength, payload->length,
+                &ciphertext);
   if (!ciphertext.length) {
     err = ECE_ERROR_ZERO_CIPHERTEXT;
     goto error;
   }
-  err = ece_derive_key_and_nonce(rawRecvPubKey, rawSenderPubKey, authSecret,
-                                 salt, &key, &nonce);
+  err = ece_derive_key_and_nonce(rawRecvPubKey, &rawSenderPubKey, authSecret,
+                                 &salt, &key, &nonce);
   if (err) {
     goto error;
   }
@@ -434,9 +436,11 @@ ece_decrypt_aes128gcm(const ece_buf_t rawRecvPubKey, const ece_buf_t authSecret,
       err = ECE_ERROR_SHORT_BLOCK;
       goto error;
     }
-    ece_buf_t record = ece_buf_slice(&ciphertext, start, end);
-    ece_buf_t block = ece_buf_slice(plaintext, offset, end - start);
-    err = ece_decrypt_record(key, nonce, counter, record,
+    ece_buf_t record;
+    ece_buf_slice(&ciphertext, start, end, &record);
+    ece_buf_t block;
+    ece_buf_slice(plaintext, offset, end - start, &block);
+    err = ece_decrypt_record(&key, &nonce, counter, &record,
                              end >= ciphertext.length, &block);
     if (err) {
       goto error;
@@ -463,16 +467,11 @@ ece_buf_alloc(ece_buf_t* buf, size_t length) {
   return buf->length > 0;
 }
 
-ece_buf_t
-ece_buf_adopt(uint8_t* bytes, size_t length) {
-  ece_buf_t buf = {bytes, length};
-  return buf;
-}
-
-ece_buf_t
-ece_buf_slice(const ece_buf_t* const buf, size_t start, size_t end) {
-  ece_buf_t slice = {&buf->bytes[start], end - start};
-  return slice;
+void
+ece_buf_slice(const ece_buf_t* buf, size_t start, size_t end,
+              ece_buf_t* slice) {
+  slice->bytes = &buf->bytes[start];
+  slice->length = end - start;
 }
 
 void
