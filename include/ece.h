@@ -67,13 +67,13 @@ ece_buf_alloc(ece_buf_t* buf, size_t capacity);
 ece_buf_t
 ece_buf_adopt(uint8_t* bytes, size_t length);
 
-// Creates and returns a slice of an existing buffer. Freeing the backing memory
-// will invalidate all its slices.
+// Initializes a buffer's byte array and length to zero. This does not
+// automatically free the backing array if one was set before.
 void
 ece_buf_reset(ece_buf_t* buf);
 
-// Initializes a buffer's byte array and length to zero. This does not
-// automatically free the backing array if one was set before.
+// Creates and returns a slice of an existing buffer. Freeing the backing memory
+// will invalidate all its slices.
 ece_buf_t
 ece_buf_slice(const ece_buf_t* const buf, size_t start, size_t end);
 

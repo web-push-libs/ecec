@@ -33,6 +33,7 @@ ece_write_uint48_be(uint8_t* bytes, uint64_t value) {
   bytes[5] = value & 0xff;
 }
 
+// HKDF from RFC 5869: `HKDF-Expand(HKDF-Extract(salt, ikm), info, length)`.
 static int
 ece_hkdf_sha256(const ece_buf_t salt, const ece_buf_t ikm, const ece_buf_t info,
                 size_t length, ece_buf_t* result) {
@@ -42,12 +43,28 @@ ece_hkdf_sha256(const ece_buf_t salt, const ece_buf_t ikm, const ece_buf_t info,
   ece_buf_reset(result);
 
   int err = ECE_OK;
-  EVP_PKEY_CTX* context = EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL);
-  if (EVP_PKEY_derive_init(context) <= 0 ||
-      EVP_PKEY_CTX_set_hkdf_md(context, EVP_sha256()) <= 0 ||
-      EVP_PKEY_CTX_set1_hkdf_salt(context, salt.bytes, salt.length) <= 0 ||
-      EVP_PKEY_CTX_set1_hkdf_key(context, ikm.bytes, ikm.length) <= 0 ||
-      EVP_PKEY_CTX_add1_hkdf_info(context, info.bytes, info.length) <= 0) {
+  EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL);
+  if (!ctx) {
+    err = ECE_ERROR_HKDF;
+    goto error;
+  }
+  if (EVP_PKEY_derive_init(ctx) <= 0) {
+    err = ECE_ERROR_HKDF;
+    goto error;
+  }
+  if (EVP_PKEY_CTX_set_hkdf_md(ctx, EVP_sha256()) <= 0) {
+    err = ECE_ERROR_HKDF;
+    goto error;
+  }
+  if (EVP_PKEY_CTX_set1_hkdf_salt(ctx, salt.bytes, salt.length) <= 0) {
+    err = ECE_ERROR_HKDF;
+    goto error;
+  }
+  if (EVP_PKEY_CTX_set1_hkdf_key(ctx, ikm.bytes, ikm.length) <= 0) {
+    err = ECE_ERROR_HKDF;
+    goto error;
+  }
+  if (EVP_PKEY_CTX_add1_hkdf_info(ctx, info.bytes, info.length) <= 0) {
     err = ECE_ERROR_HKDF;
     goto error;
   }
@@ -55,7 +72,7 @@ ece_hkdf_sha256(const ece_buf_t salt, const ece_buf_t ikm, const ece_buf_t info,
     err = ECE_ERROR_OUT_OF_MEMORY;
     goto error;
   }
-  if (EVP_PKEY_derive(context, result->bytes, &result->length) <= 0 ||
+  if (EVP_PKEY_derive(ctx, result->bytes, &result->length) <= 0 ||
       result->length != length) {
     err = ECE_ERROR_HKDF;
     goto error;
@@ -66,7 +83,7 @@ error:
   ece_buf_free(result);
 
 end:
-  EVP_PKEY_CTX_free(context);
+  EVP_PKEY_CTX_free(ctx);
   return err;
 }
 
@@ -283,7 +300,7 @@ ece_derive_key_and_nonce(const ece_buf_t rawRecvPubKey,
 // Generates a 96-bit IV for decryption, 48 bits of which are populated.
 static void
 ece_generate_iv(uint8_t* nonce, uint64_t counter, uint8_t* iv) {
-  // Copy the first 4 bytes as-is, since `(x ^ 0) == x`.
+  // Copy the first 6 bytes as-is, since `(x ^ 0) == x`.
   size_t offset = ECE_NONCE_LENGTH - 6;
   memcpy(iv, nonce, offset);
   // Combine the remaining 6 bytes (an unsigned 48-bit integer) with the
@@ -312,6 +329,7 @@ ece_decrypt_record(const ece_buf_t key, const ece_buf_t nonce, size_t counter,
     err = ECE_ERROR_DECRYPT;
     goto end;
   }
+  // The authentication tag is included at the end of the encrypted record.
   if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, ECE_TAG_LENGTH,
                           &record.bytes[record.length - ECE_TAG_LENGTH]) <= 0) {
     err = ECE_ERROR_DECRYPT;
@@ -330,8 +348,6 @@ ece_decrypt_record(const ece_buf_t key, const ece_buf_t nonce, size_t counter,
     err = ECE_ERROR_DECRYPT;
     goto end;
   }
-  // For simplicity, we allocate a buffer equal to the encrypted record size,
-  // even though the decrypted block size will be smaller.
   block->length = blockLength + finalLength;
 
   // Remove trailing padding.
@@ -400,6 +416,9 @@ ece_decrypt_aes128gcm(const ece_buf_t rawRecvPubKey, const ece_buf_t authSecret,
   if (err) {
     goto error;
   }
+  // For simplicity, we allocate a buffer equal to the encrypted record size,
+  // even though the decrypted block will be smaller. `ece_decrypt_record` will
+  // set the actual length.
   if (!ece_buf_alloc(plaintext, ciphertext.length)) {
     err = ECE_ERROR_OUT_OF_MEMORY;
     goto error;
