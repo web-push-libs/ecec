@@ -12,6 +12,7 @@ include(GNUInstallDirs)
 find_package(OpenSSL 1.1.0 REQUIRED)
 
 include_directories(include)
+enable_testing()
 
 set(ECE_SOURCES
   src/aesgcm-header.c
@@ -33,3 +34,16 @@ set_target_properties(ece-decrypt PROPERTIES
 target_include_directories(ece-decrypt PUBLIC
   tools/ece-decrypt)
 target_link_libraries(ece-decrypt ece)
+
+set(ECE_TEST_SOURCES
+  test/harness.c
+  test/test-aesgcm.c)
+add_executable(ece-test ${ECE_TEST_SOURCES})
+set_target_properties(ece-test PROPERTIES
+  EXCLUDE_FROM_ALL 1)
+target_include_directories(ece-test PUBLIC
+  test)
+target_link_libraries(ece-test ece)
+add_test(NAME ece-test COMMAND ece-test)
+add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND})
+add_dependencies(check ece-test)
