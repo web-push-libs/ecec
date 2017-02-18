@@ -14,14 +14,22 @@ extern "C" {
 #define ECE_NONCE_LENGTH 12
 #define ECE_SHA_256_LENGTH 32
 
-// HKDF info strings for the shared secret, encryption key, and nonce. Note
-// that the length includes the NUL terminator.
-#define ECE_WEB_PUSH_INFO_PREFIX "WebPush: info\0"
-#define ECE_WEB_PUSH_INFO_PREFIX_LENGTH 14
-#define ECE_KEY_INFO "Content-Encoding: aes128gcm\0"
-#define ECE_KEY_INFO_LENGTH 28
-#define ECE_NONCE_INFO "Content-Encoding: nonce\0"
-#define ECE_NONCE_INFO_LENGTH 24
+// HKDF info strings for the "aesgcm" scheme.
+#define ECE_AESGCM_WEB_PUSH_SECRET_INFO "Content-Encoding: auth\0"
+#define ECE_AESGCM_WEB_PUSH_SECRET_INFO_LENGTH 23
+#define ECE_AESGCM_WEB_PUSH_KEY_INFO_PREFIX "Content-Encoding: aesgcm\0P-256\0"
+#define ECE_AESGCM_WEB_PUSH_KEY_INFO_PREFIX_LENGTH 31
+#define ECE_AESGCM_WEB_PUSH_NONCE_INFO_PREFIX "Content-Encoding: nonce\0P-256\0"
+#define ECE_AESGCM_WEB_PUSH_NONCE_INFO_PREFIX_LENGTH 30
+
+// HKDF info strings for the shared secret, encryption key, and nonce for the
+// "aes128gcm" scheme. Note that the length includes the NUL terminator.
+#define ECE_AES128GCM_WEB_PUSH_SECRET_INFO_PREFIX "WebPush: info\0"
+#define ECE_AES128GCM_WEB_PUSH_SECRET_INFO_PREFIX_LENGTH 14
+#define ECE_AES128GCM_KEY_INFO "Content-Encoding: aes128gcm\0"
+#define ECE_AES128GCM_KEY_INFO_LENGTH 28
+#define ECE_AES128GCM_NONCE_INFO "Content-Encoding: nonce\0"
+#define ECE_AES128GCM_NONCE_INFO_LENGTH 24
 
 #define ECE_OK 0
 #define ECE_ERROR_OUT_OF_MEMORY -1
@@ -66,15 +74,21 @@ typedef enum ece_base64url_decode_policy_e {
 int
 ece_decrypt_aes128gcm(
     // The raw subscription private key.
-    const ece_buf_t* rawReceiverPrivateKey,
+    const ece_buf_t* rawRecvPrivKey,
     // The 16-byte shared authentication secret.
     const ece_buf_t* authSecret,
     // The encrypted payload. Caller retains ownership.
-    const ece_buf_t* ciphertext,
+    const ece_buf_t* payload,
     // An out parameter for the decrypted data. The caller takes ownership of
     // the buffer, and should free it when it's done by calling
     // `ece_buf_free(decryptedData)`. Set to `NULL` if decryption fails.
     ece_buf_t* plaintext);
+
+// Decrypts a payload encrypted with the "aesgcm" scheme.
+int
+ece_decrypt_aesgcm(const ece_buf_t* rawRecvPrivKey, const ece_buf_t* authSecret,
+                   const char* cryptoKeyHeader, const char* encryptionHeader,
+                   const ece_buf_t* ciphertext, ece_buf_t* plaintext);
 
 // Extracts the ephemeral public key, salt, and record size from the sender's
 // `Crypto-Key` and `Encryption` headers.
