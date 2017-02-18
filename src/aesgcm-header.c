@@ -5,7 +5,6 @@
 // includes the relevant information in a binary header, directly in the
 // payload.
 
-#include <assert.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -134,26 +133,144 @@ ece_header_params_free(ece_header_params_t* params) {
   }
 }
 
-// Indicates whether a character `c` is whitespace, per `WSP` in RFC 5234,
-// Appendix B.1.
+// Indicates whether `c` is whitespace, per `WSP` in RFC 5234, Appendix B.1.
 static inline bool
 ece_header_is_space(char c) {
   return c == ' ' || c == '\t';
 }
 
-// Indicates whether a character `c` is alphanumeric.
+// Indicates whether `c` can appear in a pair name. Only lowercase letters and
+// numbers are allowed.
 static inline bool
-ece_header_is_alphanum(char c) {
-  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-         (c >= '0' && c <= '9');
+ece_header_is_valid_pair_name(char c) {
+  return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
 }
 
-// Indicates whether the parser `state` is a terminal state.
+// Indicates whether `c` can appear in a pair value. This includes all
+// characters in the Base64url alphabet.
 static inline bool
-ece_header_state_is_terminal(int state) {
-  return state == ECE_HEADER_STATE_VALUE ||
-         state == ECE_HEADER_STATE_END_VALUE ||
-         state == ECE_HEADER_STATE_INVALID_HEADER;
+ece_header_is_valid_pair_value(char c) {
+  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+         (c >= '0' && c <= '9') || c == '-' || c == '_';
+}
+
+// A header parameter parser.
+typedef struct ece_header_parser_s {
+  int state;
+  ece_header_params_t* params;
+} ece_header_parser_t;
+
+// Parses the next token in `input` and updates the parser state. Returns true
+// if the caller shoulld advance to the next character; false otherwise.
+bool
+ece_header_parse(ece_header_parser_t* parser, const char* input) {
+  switch (parser->state) {
+  case ECE_HEADER_STATE_BEGIN_NAME:
+    if (ece_header_is_space(*input)) {
+      return true;
+    }
+    if (ece_header_is_valid_pair_name(*input)) {
+      ece_header_pairs_t* pair = ece_header_pairs_alloc(parser->params->pairs);
+      if (!pair) {
+        break;
+      }
+      parser->params->pairs = pair;
+      pair->name = input;
+      parser->state = ECE_HEADER_STATE_NAME;
+      return false;
+    }
+    break;
+
+  case ECE_HEADER_STATE_NAME:
+    if (ece_header_is_valid_pair_name(*input)) {
+      parser->params->pairs->nameLength++;
+      return true;
+    }
+    if (ece_header_is_space(*input) || *input == '=') {
+      parser->state = ECE_HEADER_STATE_END_NAME;
+      return false;
+    }
+    break;
+
+  case ECE_HEADER_STATE_END_NAME:
+    if (ece_header_is_space(*input)) {
+      return true;
+    }
+    if (*input == '=') {
+      parser->state = ECE_HEADER_STATE_BEGIN_VALUE;
+      return true;
+    }
+    break;
+
+  case ECE_HEADER_STATE_BEGIN_VALUE:
+    if (ece_header_is_space(*input)) {
+      return true;
+    }
+    if (ece_header_is_valid_pair_value(*input)) {
+      parser->params->pairs->value = input;
+      parser->state = ECE_HEADER_STATE_VALUE;
+      return false;
+    }
+    if (*input == '"') {
+      // We advance to the next character before storing the starting
+      // position, because the surrounding quotes aren't part of the value.
+      parser->params->pairs->value = input + 1;
+      parser->state = ECE_HEADER_STATE_QUOTED_VALUE;
+      return true;
+    }
+    break;
+
+  case ECE_HEADER_STATE_VALUE:
+    if (ece_header_is_space(*input) || *input == ';' || *input == ',') {
+      parser->state = ECE_HEADER_STATE_END_VALUE;
+      return false;
+    }
+    if (ece_header_is_valid_pair_value(*input)) {
+      parser->params->pairs->valueLength++;
+      return true;
+    }
+    break;
+
+  case ECE_HEADER_STATE_QUOTED_VALUE:
+    if (*input == '"') {
+      parser->state = ECE_HEADER_STATE_END_VALUE;
+      return true;
+    }
+    if (ece_header_is_valid_pair_value(*input)) {
+      // Quoted strings allow spaces and escapes, but neither `Crypto-Key` nor
+      // `Encryption` accept them. We keep the parser simple by rejecting
+      // non-Base64url characters here.
+      parser->params->pairs->valueLength++;
+      return true;
+    }
+    break;
+
+  case ECE_HEADER_STATE_END_VALUE:
+    if (ece_header_is_space(*input)) {
+      return true;
+    }
+    if (*input == ';') {
+      // New name-value pair for the same parameter. Advance the parser;
+      // `ECE_HEADER_STATE_BEGIN_NAME` will prepend a new node to the pairs
+      // list.
+      parser->state = ECE_HEADER_STATE_BEGIN_NAME;
+      return true;
+    }
+    if (*input == ',') {
+      // New parameter. Prepend a new node to the parameters list and
+      // begin parsing its pairs.
+      ece_header_params_t* param = ece_header_params_alloc(parser->params);
+      if (!param) {
+        break;
+      }
+      parser->params = param;
+      parser->state = ECE_HEADER_STATE_BEGIN_NAME;
+      return true;
+    }
+    break;
+  }
+  parser->state = ECE_HEADER_STATE_INVALID_HEADER;
+  return false;
 }
 
 // Parses a `header` value of the form `a=b; c=d; e=f, g=h, i=j` into a
@@ -164,152 +281,34 @@ ece_header_extract_params(const char* header) {
   if (!params) {
     goto error;
   }
-
+  ece_header_parser_t parser = {
+      .state = ECE_HEADER_STATE_BEGIN_NAME, .params = params,
+  };
   const char* input = header;
-  int state = ECE_HEADER_STATE_BEGIN_NAME;
-  while (state != ECE_HEADER_STATE_INVALID_HEADER && *input) {
-    switch (state) {
-    case ECE_HEADER_STATE_BEGIN_NAME:
-      if (ece_header_is_space(*input)) {
-        input++;
-        continue;
-      }
-      if (ece_header_is_alphanum(*input)) {
-        ece_header_pairs_t* pair = ece_header_pairs_alloc(params->pairs);
-        if (!pair) {
-          goto error;
-        }
-        params->pairs = pair;
-        pair->name = input;
-        state = ECE_HEADER_STATE_NAME;
-        continue;
-      }
-      state = ECE_HEADER_STATE_INVALID_HEADER;
-      continue;
-
-    case ECE_HEADER_STATE_NAME:
-      if (ece_header_is_alphanum(*input)) {
-        params->pairs->nameLength++;
-        input++;
-        continue;
-      }
-      if (ece_header_is_space(*input) || *input == '=') {
-        state = ECE_HEADER_STATE_END_NAME;
-        continue;
-      }
-      state = ECE_HEADER_STATE_INVALID_HEADER;
-      continue;
-
-    case ECE_HEADER_STATE_END_NAME:
-      if (ece_header_is_space(*input)) {
-        input++;
-        continue;
-      }
-      if (*input == '=') {
-        state = ECE_HEADER_STATE_BEGIN_VALUE;
-        continue;
-      }
-      state = ECE_HEADER_STATE_INVALID_HEADER;
-      continue;
-
-    case ECE_HEADER_STATE_BEGIN_VALUE:
-      if (ece_header_is_space(*input)) {
-        input++;
-        continue;
-      }
-      if (ece_header_is_alphanum(*input)) {
-        params->pairs->value = input;
-        state = ECE_HEADER_STATE_VALUE;
-        continue;
-      }
-      if (*input == '"') {
-        // Don't include the quote in the param value.
-        input++;
-        params->pairs->value = input;
-        state = ECE_HEADER_STATE_QUOTED_VALUE;
-        continue;
-      }
-      state = ECE_HEADER_STATE_INVALID_HEADER;
-      continue;
-
-    case ECE_HEADER_STATE_VALUE:
-      if (ece_header_is_space(*input) || *input == ';' || *input == ',') {
-        state = ECE_HEADER_STATE_END_VALUE;
-        continue;
-      }
-      if (ece_header_is_alphanum(*input)) {
-        params->pairs->valueLength++;
-        input++;
-        continue;
-      }
-      state = ECE_HEADER_STATE_INVALID_HEADER;
-      continue;
-
-    case ECE_HEADER_STATE_QUOTED_VALUE:
-      if (*input == '"') {
-        state = ECE_HEADER_STATE_END_VALUE;
-        input++;
-        continue;
-      }
-      if (ece_header_is_alphanum(*input)) {
-        // Quoted strings allow additional characters and escape sequences,
-        // but neither `Crypto-Key` nor `Encryption` accept them. We keep the
-        // parser simple by rejecting quoted non-alphanumeric characters.
-        params->pairs->valueLength++;
-        input++;
-        continue;
-      }
-      state = ECE_HEADER_STATE_INVALID_HEADER;
-      continue;
-
-    case ECE_HEADER_STATE_END_VALUE:
-      if (ece_header_is_space(*input)) {
-        input++;
-        continue;
-      }
-      if (*input == ';') {
-        // New name-value pair for the same parameter. Advance the parser;
-        // `ECE_HEADER_STATE_BEGIN_NAME` will prepend a new node to the pairs
-        // list.
-        state = ECE_HEADER_STATE_BEGIN_NAME;
-        input++;
-        continue;
-      }
-      if (*input == ',') {
-        // New parameter. Prepend a new node to the parameters list and
-        // parse its pairs.
-        ece_header_params_t* param = ece_header_params_alloc(params);
-        if (!param) {
-          goto error;
-        }
-        params = param;
-        state = ECE_HEADER_STATE_BEGIN_NAME;
-        input++;
-        continue;
-      }
-      state = ECE_HEADER_STATE_INVALID_HEADER;
-      continue;
-
-    default:
-      // Unexpected parser state.
-      assert(false);
-      state = ECE_HEADER_STATE_INVALID_HEADER;
-      continue;
+  while (*input) {
+    if (ece_header_parse(&parser, input)) {
+      input++;
+    }
+    if (parser.state == ECE_HEADER_STATE_INVALID_HEADER) {
+      goto error;
     }
   }
-  if (!ece_header_state_is_terminal(state)) {
-    // Incomplete header; we should have ended in a terminal state.
-    goto error;
+  if (parser.state != ECE_HEADER_STATE_END_VALUE) {
+    // If the header ends with an unquoted value, the parser might still be in a
+    // non-terminal state. Try to parse an extra space to reach the terminal
+    // state.
+    ece_header_parse(&parser, " ");
+    if (parser.state != ECE_HEADER_STATE_END_VALUE) {
+      // If we're still in a non-terminal state, the header is incomplete.
+      goto error;
+    }
   }
-  goto end;
+  ece_header_params_reverse(params);
+  return params;
 
 error:
   ece_header_params_free(params);
   return NULL;
-
-end:
-  ece_header_params_reverse(params);
-  return params;
 }
 
 int
