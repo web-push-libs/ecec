@@ -1,0 +1,39 @@
+language: c
+compiler:
+  - clang
+  - gcc
+sudo: false
+
+addons:
+  apt:
+    sources:
+      - george-edison55-precise-backports
+    packages:
+      - cmake
+      - cmake-data
+
+cache:
+  ccache: true
+  directories:
+    - $HOME/.src
+
+env:
+  global:
+    - OPENSSL_VERSION=1.1.0e
+
+before_install:
+  - "[ -f $HOME/.src/openssl-$OPENSSL_VERSION.tar.gz ] || wget -P $HOME/.src https://www.openssl.org/source/openssl-$OPENSSL_VERSION.tar.gz"
+
+install:
+  - tar xzf $HOME/.src/openssl-$OPENSSL_VERSION.tar.gz
+  - pushd openssl-$OPENSSL_VERSION
+  - env CC="ccache cc" CXX="ccache c++" ./config --prefix=$HOME/.local > build.log 2>&1 || (cat build.log && exit 1)
+  - make > build.log 2>&1 || (cat build.log && exit 1)
+  - make install > build.log 2>&1 || (cat build.log && exit 1)
+  - popd
+
+script:
+  - mkdir build
+  - cd build
+  - cmake -DOPENSSL_ROOT_DIR=$HOME/.local ..
+  - env CTEST_OUTPUT_ON_FAILURE=1 make check
