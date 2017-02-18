@@ -85,7 +85,6 @@ ece_header_pairs_free(ece_header_pairs_t* pairs) {
     free(pair);
     pair = next;
   }
-  free(pairs);
 }
 
 // A linked list that holds parameters extracted from a header value. For
@@ -133,7 +132,6 @@ ece_header_params_free(ece_header_params_t* params) {
     free(param);
     param = next;
   }
-  free(params);
 }
 
 // Indicates whether a character `c` is whitespace, per `WSP` in RFC 5234,
