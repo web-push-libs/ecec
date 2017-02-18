@@ -72,7 +72,7 @@ typedef enum ece_base64url_decode_policy_e {
 
 // Decrypts a payload encrypted with the "aes128gcm" scheme.
 int
-ece_decrypt_aes128gcm(
+ece_aes128gcm_decrypt(
     // The raw subscription private key.
     const ece_buf_t* rawRecvPrivKey,
     // The 16-byte shared authentication secret.
@@ -86,7 +86,7 @@ ece_decrypt_aes128gcm(
 
 // Decrypts a payload encrypted with the "aesgcm" scheme.
 int
-ece_decrypt_aesgcm(const ece_buf_t* rawRecvPrivKey, const ece_buf_t* authSecret,
+ece_aesgcm_decrypt(const ece_buf_t* rawRecvPrivKey, const ece_buf_t* authSecret,
                    const char* cryptoKeyHeader, const char* encryptionHeader,
                    const ece_buf_t* ciphertext, ece_buf_t* plaintext);
 

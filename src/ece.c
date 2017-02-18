@@ -529,9 +529,9 @@ ece_generate_iv(uint8_t* nonce, uint64_t counter, uint8_t* iv) {
 
 // Converts an encrypted record to a decrypted block.
 static int
-ece_decrypt_record(const ece_buf_t* key, const ece_buf_t* nonce, size_t counter,
-                   const ece_buf_t* record, bool isLastRecord,
-                   ece_buf_t* block) {
+ece_aes128gcm_decrypt_record(const ece_buf_t* key, const ece_buf_t* nonce,
+                             size_t counter, const ece_buf_t* record,
+                             bool isLastRecord, ece_buf_t* block) {
   int err = ECE_OK;
 
   EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
@@ -597,7 +597,7 @@ end:
 }
 
 int
-ece_decrypt_aes128gcm(const ece_buf_t* rawRecvPrivKey,
+ece_aes128gcm_decrypt(const ece_buf_t* rawRecvPrivKey,
                       const ece_buf_t* authSecret, const ece_buf_t* payload,
                       ece_buf_t* plaintext) {
   int err = ECE_OK;
@@ -636,8 +636,8 @@ ece_decrypt_aes128gcm(const ece_buf_t* rawRecvPrivKey,
     goto error;
   }
   // For simplicity, we allocate a buffer equal to the encrypted record size,
-  // even though the decrypted block will be smaller. `ece_decrypt_record` will
-  // set the actual length.
+  // even though the decrypted block will be smaller.
+  // `ece_aes128gcm_decrypt_record` will set the actual length.
   if (!ece_buf_alloc(plaintext, ciphertext.length)) {
     err = ECE_ERROR_OUT_OF_MEMORY;
     goto error;
@@ -657,8 +657,8 @@ ece_decrypt_aes128gcm(const ece_buf_t* rawRecvPrivKey,
     ece_buf_slice(&ciphertext, start, end, &record);
     ece_buf_t block;
     ece_buf_slice(plaintext, offset, end - start, &block);
-    err = ece_decrypt_record(&key, &nonce, counter, &record,
-                             end >= ciphertext.length, &block);
+    err = ece_aes128gcm_decrypt_record(&key, &nonce, counter, &record,
+                                       end >= ciphertext.length, &block);
     if (err) {
       goto error;
     }
@@ -678,7 +678,7 @@ end:
 }
 
 int
-ece_decrypt_aesgcm(const ece_buf_t* rawRecvPrivKey, const ece_buf_t* authSecret,
+ece_aesgcm_decrypt(const ece_buf_t* rawRecvPrivKey, const ece_buf_t* authSecret,
                    const char* cryptoKeyHeader, const char* encryptionHeader,
                    const ece_buf_t* ciphertext, ece_buf_t* plaintext) {
   int err = ECE_OK;
