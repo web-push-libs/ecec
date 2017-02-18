@@ -33,6 +33,15 @@ cmake -DOPENSSL_ROOT_DIR=/usr/local/ssl \
       -DOPENSSL_SSL_LIBRARY=/usr/local/lib/libssl.dylib ../
 ```
 
+## Tests
+
+```shell
+> mkdir build
+> cd build
+> cmake ../
+> env CTEST_OUTPUT_ON_FAILURE=1 make check
+```
+
 ## License
 
 MIT.
