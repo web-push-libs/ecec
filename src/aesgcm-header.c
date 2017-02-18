@@ -380,17 +380,18 @@ ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
     err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER;
     goto end;
   }
+  ece_header_params_t* cryptoKeyParam = cryptoKeyParams;
   if (keyId) {
     // If the sender specified a key ID in the `Encryption` header, find the
     // matching parameter in the `Crypto-Key` header. Otherwise, we assume
     // there's only one key, and use the first one we see.
-    while (cryptoKeyParams) {
-      if (!cryptoKeyParams->pairs) {
+    while (cryptoKeyParam) {
+      if (!cryptoKeyParam->pairs) {
         err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER;
         goto end;
       }
       bool keyIdMatches = true;
-      for (ece_header_pairs_t* pair = cryptoKeyParams->pairs; pair;
+      for (ece_header_pairs_t* pair = cryptoKeyParam->pairs; pair;
            pair = pair->next) {
         keyIdMatches = ece_header_pairs_has_value(pair, keyId);
         if (keyIdMatches) {
@@ -400,15 +401,15 @@ ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
       if (keyIdMatches) {
         break;
       }
-      cryptoKeyParams = cryptoKeyParams->next;
+      cryptoKeyParam = cryptoKeyParam->next;
     }
-    if (!cryptoKeyParams) {
+    if (!cryptoKeyParam) {
       // We don't have a matching key ID with a `dh` name-value pair.
       err = ECE_ERROR_INVALID_DH;
       goto end;
     }
   }
-  for (ece_header_pairs_t* pair = cryptoKeyParams->pairs; pair;
+  for (ece_header_pairs_t* pair = cryptoKeyParam->pairs; pair;
        pair = pair->next) {
     if (!ece_header_pairs_has_name(pair, "dh")) {
       continue;
