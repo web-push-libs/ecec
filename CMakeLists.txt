@@ -14,6 +14,8 @@ find_package(OpenSSL 1.1.0 REQUIRED)
 include_directories(include)
 
 set(ECE_SOURCES
+  src/aesgcm-header.c
+  src/base64url.c
   src/ece.c)
 add_library(ece ${ECE_SOURCES})
 set_target_properties(ece PROPERTIES
@@ -24,7 +26,6 @@ target_include_directories(ece PUBLIC
 target_link_libraries(ece ${OPENSSL_LIBRARIES})
 
 set(ECE_DECRYPT_SOURCES
-  tools/ece-decrypt/base64url.c
   tools/ece-decrypt/ece-decrypt.c)
 add_executable(ece-decrypt ${ECE_DECRYPT_SOURCES})
 set_target_properties(ece-decrypt PROPERTIES

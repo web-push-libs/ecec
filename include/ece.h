@@ -37,12 +37,30 @@ extern "C" {
 #define ECE_ERROR_SHORT_HEADER -11
 #define ECE_ERROR_ZERO_CIPHERTEXT -12
 #define ECE_ERROR_HKDF -14
+#define ECE_ERROR_INVALID_ENCRYPTION_HEADER -15
+#define ECE_ERROR_INVALID_CRYPTO_KEY_HEADER -16
+#define ECE_ERROR_INVALID_RS -17
+#define ECE_ERROR_INVALID_SALT -18
+#define ECE_ERROR_INVALID_DH -19
 
 // A buffer data type, inspired by libuv's `uv_buf_t`.
 typedef struct ece_buf_s {
   uint8_t* bytes;
   size_t length;
 } ece_buf_t;
+
+typedef enum ece_base64url_decode_policy_e {
+  // Fails decoding if the input is unpadded. RFC 4648, section 3.2 requires
+  // padding, unless the referring specification prohibits it.
+  REQUIRE_PADDING,
+
+  // Tolerates padded and unpadded input.
+  IGNORE_PADDING,
+
+  // Fails decoding if the input is padded. This follows the strict Base64url
+  // variant used in JWS (RFC 7515, Appendix C) and Web Push Message Encryption.
+  REJECT_PADDING,
+} ece_base64url_decode_policy_t;
 
 // Decrypts a payload encrypted with the "aes128gcm" scheme.
 int
@@ -57,6 +75,14 @@ ece_decrypt_aes128gcm(
     // the buffer, and should free it when it's done by calling
     // `ece_buf_free(decryptedData)`. Set to `NULL` if decryption fails.
     ece_buf_t* plaintext);
+
+// Extracts the ephemeral public key, salt, and record size from the sender's
+// `Crypto-Key` and `Encryption` headers.
+int
+ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
+                                        const char* encryptionHeader,
+                                        uint32_t* rs, ece_buf_t* salt,
+                                        ece_buf_t* rawSenderPubKey);
 
 // Initializes a buffer with the requested length.
 bool
@@ -75,6 +101,11 @@ ece_buf_slice(const ece_buf_t* src, size_t start, size_t end, ece_buf_t* dest);
 // Frees a buffer's backing memory and resets its length.
 void
 ece_buf_free(ece_buf_t* buffer);
+
+// Decodes a Base64url-encoded (RFC 4648) string into `binary`.
+int
+ece_base64url_decode(const char* base64, size_t base64Len,
+                     ece_base64url_decode_policy_t policy, ece_buf_t* binary);
 
 #ifdef __cplusplus
 }
