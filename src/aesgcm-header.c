@@ -38,7 +38,7 @@ typedef struct ece_header_pairs_s {
   struct ece_header_pairs_s* next;
 } ece_header_pairs_t;
 
-// Initializes a name-value pair node at the head of the pairs list. `head` may
+// Initializes a name-value pair node at the head of the pair list. `head` may
 // be `NULL`.
 ece_header_pairs_t*
 ece_header_pairs_alloc(ece_header_pairs_t* head) {
