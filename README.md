@@ -1,5 +1,7 @@
 # ecec
 
+[![Build Status](https://travis-ci.org/kitcambridge/ecec.svg?branch=master)](https://travis-ci.org/kitcambridge/ecec)
+
 **ecec** is a C implementation of the [HTTP Encrypted Content-Encoding](http://httpwg.org/http-extensions/draft-ietf-httpbis-encryption-encoding.html) draft. It's a port of the reference [JavaScript implementation](https://github.com/martinthomson/encrypted-content-encoding).
 
 Currently, **ecec** only implements enough to support decrypting [Web Push messages](http://webpush-wg.github.io/webpush-encryption/), which use a shared secret derived using elliptic-curve Diffie-Hellman.
