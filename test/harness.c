@@ -1,8 +1,8 @@
+#include "harness.h"
+
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
-
-#include "harness.h"
 
 void
 ece_assert_bufs_equal(ece_buf_t* a, ece_buf_t* b, const char* desc) {
