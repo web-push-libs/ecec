@@ -17,7 +17,8 @@ enable_testing()
 set(ECE_SOURCES
   src/aesgcm-header.c
   src/base64url.c
-  src/ece.c)
+  src/buffer.c
+  src/decrypt.c)
 add_library(ece ${ECE_SOURCES})
 set_target_properties(ece PROPERTIES
   OUTPUT_NAME ece

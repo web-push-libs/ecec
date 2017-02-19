@@ -39,7 +39,7 @@ typedef struct ece_header_pairs_s {
 
 // Initializes a name-value pair node at the head of the pair list. `head` may
 // be `NULL`.
-ece_header_pairs_t*
+static ece_header_pairs_t*
 ece_header_pairs_alloc(ece_header_pairs_t* head) {
   ece_header_pairs_t* pairs =
       (ece_header_pairs_t*) malloc(sizeof(ece_header_pairs_t));
@@ -55,19 +55,19 @@ ece_header_pairs_alloc(ece_header_pairs_t* head) {
 }
 
 // Indicates whether a name-value pair node matches the `name`.
-bool
+static inline bool
 ece_header_pairs_has_name(ece_header_pairs_t* pair, const char* name) {
   return !strncmp(pair->name, name, pair->nameLength);
 }
 
 // Indicates whether a name-value pair node matches the `value`.
-bool
+static inline bool
 ece_header_pairs_has_value(ece_header_pairs_t* pair, const char* value) {
   return !strncmp(pair->value, value, pair->valueLength);
 }
 
 // Copies a pair node's value into a C string.
-char*
+static char*
 ece_header_pairs_value_to_str(ece_header_pairs_t* pair) {
   char* value = (char*) malloc(pair->valueLength + 1);
   strncpy(value, pair->value, pair->valueLength);
@@ -76,7 +76,7 @@ ece_header_pairs_value_to_str(ece_header_pairs_t* pair) {
 }
 
 // Frees a name-value pair list and all its nodes.
-void
+static void
 ece_header_pairs_free(ece_header_pairs_t* pairs) {
   ece_header_pairs_t* pair = pairs;
   while (pair) {
@@ -97,7 +97,7 @@ typedef struct ece_header_params_s {
 
 // Initializes a parameter node at the head of the parameter list. `head` may be
 // `NULL`.
-ece_header_params_t*
+static ece_header_params_t*
 ece_header_params_alloc(ece_header_params_t* head) {
   ece_header_params_t* params =
       (ece_header_params_t*) malloc(sizeof(ece_header_params_t));
@@ -110,7 +110,7 @@ ece_header_params_alloc(ece_header_params_t* head) {
 }
 
 // Reverses a parameter list in-place.
-void
+static void
 ece_header_params_reverse(ece_header_params_t* params) {
   ece_header_params_t* sibling = NULL;
   while (params) {
@@ -122,7 +122,7 @@ ece_header_params_reverse(ece_header_params_t* params) {
 }
 
 // Frees a parameter list and all its nodes.
-void
+static void
 ece_header_params_free(ece_header_params_t* params) {
   ece_header_params_t* param = params;
   while (param) {
@@ -162,7 +162,7 @@ typedef struct ece_header_parser_s {
 
 // Parses the next token in `input` and updates the parser state. Returns true
 // if the caller shoulld advance to the next character; false otherwise.
-bool
+static bool
 ece_header_parse(ece_header_parser_t* parser, const char* input) {
   switch (parser->state) {
   case ECE_HEADER_STATE_BEGIN_NAME:
@@ -275,7 +275,7 @@ ece_header_parse(ece_header_parser_t* parser, const char* input) {
 
 // Parses a `header` value of the form `a=b; c=d; e=f, g=h, i=j` into a
 // parameter list.
-ece_header_params_t*
+static ece_header_params_t*
 ece_header_extract_params(const char* header) {
   ece_header_params_t* params = ece_header_params_alloc(NULL);
   if (!params) {
