@@ -8,11 +8,14 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 
-#define ECE_HEADER_SIZE 21
 #define ECE_TAG_LENGTH 16
 #define ECE_KEY_LENGTH 16
 #define ECE_NONCE_LENGTH 12
 #define ECE_SHA_256_LENGTH 32
+
+#define ECE_AES128GCM_HEADER_SIZE 21
+#define ECE_AESGCM_PAD_SIZE 2
+#define ECE_AESGCM_KEY_LENGTH_SIZE 2
 
 // HKDF info strings for the "aesgcm" scheme.
 #define ECE_AESGCM_WEB_PUSH_SECRET_INFO "Content-Encoding: auth\0"
