@@ -318,6 +318,9 @@ ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
                                         ece_buf_t* rawSenderPubKey) {
   int err = ECE_OK;
 
+  ece_buf_reset(salt);
+  ece_buf_reset(rawSenderPubKey);
+
   ece_header_params_t* encryptionParams = NULL;
   ece_header_params_t* cryptoKeyParams = NULL;
   char* keyId = NULL;
@@ -330,7 +333,7 @@ ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
   encryptionParams = ece_header_extract_params(encryptionHeader);
   if (!encryptionParams || !encryptionParams->pairs) {
     err = ECE_ERROR_INVALID_ENCRYPTION_HEADER;
-    goto end;
+    goto error;
   }
   for (ece_header_pairs_t* pair = encryptionParams->pairs; pair;
        pair = pair->next) {
@@ -340,7 +343,7 @@ ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
         // The key ID is optional, and is used to identify the public key in the
         // `Crypto-Key` header if multiple encryption keys are specified.
         err = ECE_ERROR_OUT_OF_MEMORY;
-        goto end;
+        goto error;
       }
       continue;
     }
@@ -349,36 +352,36 @@ ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
       char* value = ece_header_pairs_value_to_str(pair);
       if (!value) {
         err = ECE_ERROR_INVALID_RS;
-        goto end;
+        goto error;
       }
       int result = sscanf(value, "%" SCNu32, rs);
       free(value);
       if (result <= 0 || !*rs) {
         err = ECE_ERROR_INVALID_RS;
-        goto end;
+        goto error;
       }
       continue;
     }
     if (ece_header_pairs_has_name(pair, "salt")) {
       // The salt is required, and must be Base64url-encoded without padding.
-      if (ece_base64url_decode(pair->value, pair->valueLength, REJECT_PADDING,
+      if (ece_base64url_decode(pair->value, pair->valueLen, REJECT_PADDING,
                                salt)) {
         err = ECE_ERROR_INVALID_SALT;
-        goto end;
+        goto error;
       }
       continue;
     }
   }
   if (!salt) {
     err = ECE_ERROR_INVALID_SALT;
-    goto end;
+    goto error;
   }
 
   // Next, find the ephemeral public key in the `Crypto-Key` header.
   cryptoKeyParams = ece_header_extract_params(cryptoKeyHeader);
   if (!cryptoKeyParams) {
     err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER;
-    goto end;
+    goto error;
   }
   ece_header_params_t* cryptoKeyParam = cryptoKeyParams;
   if (keyId) {
@@ -388,7 +391,7 @@ ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
     while (cryptoKeyParam) {
       if (!cryptoKeyParam->pairs) {
         err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER;
-        goto end;
+        goto error;
       }
       bool keyIdMatches = true;
       for (ece_header_pairs_t* pair = cryptoKeyParam->pairs; pair;
@@ -406,7 +409,7 @@ ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
     if (!cryptoKeyParam) {
       // We don't have a matching key ID with a `dh` name-value pair.
       err = ECE_ERROR_INVALID_DH;
-      goto end;
+      goto error;
     }
   }
   for (ece_header_pairs_t* pair = cryptoKeyParam->pairs; pair;
@@ -418,14 +421,20 @@ ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
     if (ece_base64url_decode(pair->value, pair->valueLength, REJECT_PADDING,
                              rawSenderPubKey)) {
       err = ECE_ERROR_INVALID_DH;
-      goto end;
+      goto error;
     }
     break;
   }
   if (!rawSenderPubKey) {
     err = ECE_ERROR_INVALID_DH;
-    goto end;
+    goto error;
   }
+  goto end;
+
+error:
+  *rs = 0;
+  ece_buf_free(salt);
+  ece_buf_free(rawSenderPubKey);
 
 end:
   ece_header_params_free(encryptionParams);

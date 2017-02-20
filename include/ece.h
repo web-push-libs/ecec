@@ -79,25 +79,39 @@ typedef enum ece_base64url_decode_policy_e {
 // Decrypts a payload encrypted with the "aes128gcm" scheme.
 int
 ece_aes128gcm_decrypt(
-    // The raw subscription private key.
+    // The ECDH private key for the push subscription, encoded as an octet
+    // string.
     const ece_buf_t* rawRecvPrivKey,
     // The 16-byte shared authentication secret.
     const ece_buf_t* authSecret,
-    // The encrypted payload. Caller retains ownership.
+    // The encrypted payload.
     const ece_buf_t* payload,
-    // An out parameter for the decrypted data. The caller takes ownership of
-    // the buffer, and should free it when it's done by calling
-    // `ece_buf_free(decryptedData)`. Set to `NULL` if decryption fails.
+    // An in-out parameter to hold the plaintext. The buffer is reset before
+    // decryption, and freed if an error occurs. If decryption succeeds, the
+    // caller takes ownership of the buffer, and should free it when it's done.
     ece_buf_t* plaintext);
 
 // Decrypts a payload encrypted with the "aesgcm" scheme.
 int
-ece_aesgcm_decrypt(const ece_buf_t* rawRecvPrivKey, const ece_buf_t* authSecret,
-                   const char* cryptoKeyHeader, const char* encryptionHeader,
-                   const ece_buf_t* ciphertext, ece_buf_t* plaintext);
+ece_aesgcm_decrypt(
+    // The ECDH private key for the push subscription, encoded as an octet
+    // string.
+    const ece_buf_t* rawRecvPrivKey,
+    // The 16-byte shared authentication secret.
+    const ece_buf_t* authSecret,
+    // The value of the sender's `Crypto-Key` HTTP header.
+    const char* cryptoKeyHeader,
+    // The value of the sender's `Encryption` HTTP header.
+    const char* encryptionHeader,
+    // The encrypted message.
+    const ece_buf_t* ciphertext,
+    // An in-out parameter to hold the plaintext. The same ownership rules apply
+    // as for `ece_aes128gcm_decrypt`.
+    ece_buf_t* plaintext);
 
 // Extracts the ephemeral public key, salt, and record size from the sender's
-// `Crypto-Key` and `Encryption` headers.
+// `Crypto-Key` and `Encryption` headers. The caller takes ownership of `salt`
+// and `rawSenderPubKey` if parsing succeeds.
 int
 ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
                                         const char* encryptionHeader,
@@ -108,8 +122,8 @@ ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
 bool
 ece_buf_alloc(ece_buf_t* buf, size_t length);
 
-// Initializes a buffer's byte array and length to zero. This does not
-// automatically free the backing array if one was set before.
+// Resets a buffer's byte array and length to zero. This does not automatically
+// free the backing array if one was set before.
 void
 ece_buf_reset(ece_buf_t* buf);
 

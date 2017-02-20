@@ -59,8 +59,6 @@ ece_hkdf_sha256(const ece_buf_t* salt, const ece_buf_t* ikm,
                 const ece_buf_t* info, size_t outputLength, ece_buf_t* result) {
   int err = ECE_OK;
 
-  ece_buf_reset(result);
-
   EVP_PKEY_CTX* ctx = NULL;
   if (salt->length > INT_MAX || ikm->length > INT_MAX ||
       info->length > INT_MAX) {
@@ -617,6 +615,8 @@ ece_decrypt(const ece_buf_t* rawRecvPrivKey, const ece_buf_t* rawSenderPubKey,
             ece_buf_t* plaintext) {
   int err = ECE_OK;
 
+  ece_buf_reset(plaintext);
+
   ece_buf_t key;
   ece_buf_reset(&key);
   ece_buf_t nonce;
@@ -728,8 +728,6 @@ int
 ece_aes128gcm_decrypt(const ece_buf_t* rawRecvPrivKey,
                       const ece_buf_t* authSecret, const ece_buf_t* payload,
                       ece_buf_t* plaintext) {
-  ece_buf_reset(plaintext);
-
   if (payload->length < ECE_AES128GCM_HEADER_SIZE) {
     return ECE_ERROR_SHORT_HEADER;
   }
@@ -760,7 +758,6 @@ ece_aesgcm_decrypt(const ece_buf_t* rawRecvPrivKey, const ece_buf_t* authSecret,
                    const ece_buf_t* ciphertext, ece_buf_t* plaintext) {
   int err = ECE_OK;
 
-  ece_buf_reset(plaintext);
   ece_buf_t rawSenderPubKey;
   ece_buf_reset(&rawSenderPubKey);
   ece_buf_t salt;

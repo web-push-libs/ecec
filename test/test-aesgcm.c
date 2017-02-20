@@ -153,11 +153,9 @@ test_valid_crypto_params() {
   for (size_t i = 0; i < length; i++) {
     valid_param_test_t t = valid_param_tests[i];
 
-    uint32_t rs = 0;
+    uint32_t rs;
     ece_buf_t salt;
-    ece_buf_reset(&salt);
     ece_buf_t rawSenderPubKey;
-    ece_buf_reset(&rawSenderPubKey);
 
     int err = ece_header_extract_aesgcm_crypto_params(
         t.cryptoKey, t.encryption, &rs, &salt, &rawSenderPubKey);
@@ -186,18 +184,18 @@ test_invalid_crypto_params() {
   for (size_t i = 0; i < length; i++) {
     invalid_param_test_t t = invalid_param_tests[i];
 
-    uint32_t rs = 0;
+    uint32_t rs;
     ece_buf_t salt;
-    ece_buf_reset(&salt);
     ece_buf_t rawSenderPubKey;
-    ece_buf_reset(&rawSenderPubKey);
 
     int err = ece_header_extract_aesgcm_crypto_params(
         t.cryptoKey, t.encryption, &rs, &salt, &rawSenderPubKey);
     ece_assert(err == t.err, "%s: Want error %d; got %d", t.desc, t.err, err);
-
-    ece_buf_free(&salt);
-    ece_buf_free(&rawSenderPubKey);
+    ece_assert(rs == 0, "%s: Should reset rs for error %d", t.desc, t.err);
+    ece_assert(!salt.bytes, "%s: Should reset salt buffer for error %d", t.desc,
+               t.err);
+    ece_assert(!rawSenderPubKey.bytes,
+               "%s: Should reset key buffer for error %d", t.desc, t.err);
   }
 }
 

@@ -1,12 +1,25 @@
 #include "ece.h"
 
+// This file implements a buffer data type. Each buffer is backed by a byte
+// array, and knows its own length. By convention, functions take buffers as
+// `const` in parameters. It's safe for the caller to free the buffer after
+// the function returns. Functions that take buffers as out parameters will
+// reset the buffer; it's not necessary to call `ece_buf_reset` beforehand.
+// Freeing a buffer resets it, so it's safe to call `ece_buf_free` multiple
+// times on the same buffer. This simplifies error handling paths. It's also
+// possible to take a slice of an existing buffer. However, since all slices
+// share the same backing array, it's not safe for a slice to outlive its
+// parent, or to free a slice.
+
+#include <assert.h>
 #include <stdlib.h>
 
 bool
-ece_buf_alloc(ece_buf_t* buf, size_t length) {
-  buf->bytes = (uint8_t*) malloc(length * sizeof(uint8_t));
-  buf->length = buf->bytes ? length : 0;
-  return buf->length > 0;
+ece_buf_alloc(ece_buf_t* buf, size_t len) {
+  assert(!buf->bytes && !buf->length);
+  buf->bytes = (uint8_t*) malloc(len * sizeof(uint8_t));
+  buf->length = buf->bytes ? len : 0;
+  return buf->length;
 }
 
 void
