@@ -46,7 +46,7 @@ script:
   - mkdir build
   - pushd build
   - env COVERAGE=1 cmake -DOPENSSL_ROOT_DIR=$HOME/.local ..
-  - env CTEST_OUTPUT_ON_FAILURE=1 make check
+  - make check
   - popd
 
 after_success:

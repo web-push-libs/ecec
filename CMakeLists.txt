@@ -46,7 +46,7 @@ set_target_properties(ece-test PROPERTIES EXCLUDE_FROM_ALL 1)
 target_include_directories(ece-test PUBLIC test)
 target_link_libraries(ece-test PUBLIC ece)
 add_test(NAME ece-test COMMAND ece-test)
-add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND})
+add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} "--output-on-failure")
 add_dependencies(check ece-test)
 
 if(MSVC)

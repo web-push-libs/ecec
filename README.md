@@ -73,34 +73,60 @@ ece_aes128gcm_decrypt(const ece_buf_t* rawRecvPrivKey,
 
 * [OpenSSL](https://www.openssl.org/) 1.1.0 or higher
 * [CMake](https://cmake.org/) 3.1 or higher
+* A C99-capable compiler, like [Clang](https://clang.llvm.org/) 3.4, [GCC](https://gcc.gnu.org/) 4.6, or [Visual Studio](https://www.visualstudio.com/vs/community/) 2015
 
-### Library
+### macOS and \*nix
+
+OpenSSL 1.1.0 is new, and backward-incompatible with 1.0.x. If your package manager ([MacPorts](https://www.macports.org/), [Homebrew](https://brew.sh/), [APT](https://help.ubuntu.com/community/AptGet/Howto), [DNF](https://dnf.readthedocs.io/en/latest/), [yum](http://yum.baseurl.org/)) doesn't have 1.1.0 yet, you'll need to compile it yourself. **ecec** does this to run its tests on [Travis CI](https://docs.travis-ci.com/user/ci-environment/); please see `.travis.yml` for the commands.
+
+In particular, you'll need to set the `OPENSSL_ROOT_DIR` cache entry for CMake to find your compiled version. To build the library:
 
 ```shell
 > mkdir build
 > cd build
-> cmake ..
-```
-
-OpenSSL 1.1.0 is new, and backward-incompatible with 1.0.1. If your package manager ([MacPorts](https://www.macports.org/), [Homebrew](https://brew.sh/), [APT](https://help.ubuntu.com/community/AptGet/Howto), [DNF](https://dnf.readthedocs.io/en/latest/), [yum](http://yum.baseurl.org/)) doesn't have 1.1.0 yet, you'll need to compile it yourself. **ecec** does this to run its tests on [Travis CI](https://docs.travis-ci.com/user/ci-environment/); please see `.travis.yml` for the commands. For Windows, [Shining Light](https://slproweb.com/products/Win32OpenSSL.html) provides OpenSSL binaries.
-
-In particular, you'll need to set the `OPENSSL_ROOT_DIR` cache entry for CMake to find your compiled version:
-
-```shell
 > cmake -DOPENSSL_ROOT_DIR=/usr/local ..
+> make
 ```
 
-### Decryptor
+To build the decryption tool:
 
 ```shell
 > make ece-decrypt
 > ./ece-decrypt
 ```
 
-### Tests
+To run the tests:
 
 ```shell
-> env CTEST_OUTPUT_ON_FAILURE=1 make check
+> make check
+```
+
+### Windows
+
+[Shining Light](https://slproweb.com/products/Win32OpenSSL.html) provides OpenSSL binaries for Windows. The installer will ask if you want to copy the OpenSSL DLLs into the system directory, or the OpenSSL binaries directory. If you choose the binaries directory, you'll need to add it to your `Path`.
+
+To do so, right-click the Start button, navigate to "System" > "Advanced system settings" > "Environment Variables...", find `Path` under "System variables", click "Edit" > "New", and enter the directory name. This will be `C:\OpenSSL-Win64\bin` if you've installed the 64-bit version in the default location.
+
+You can then build the library like so:
+
+```powershell
+> mkdir build
+> cd build
+> cmake -G "Visual Studio 14 2015 Win64" -DOPENSSL_ROOT_DIR=C:\OpenSSL-Win64 ..
+> cmake --build .
+```
+
+To build the decryption tool:
+
+```powershell
+> cmake --build . --target ece-decrypt
+> .\Debug\ece-decrypt
+```
+
+To run the tests:
+
+```powershell
+> cmake --build . --target check
 ```
 
 ## License
