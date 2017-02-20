@@ -53,7 +53,7 @@ main(int argc, char** argv) {
   }
   memcpy(text, plaintext.bytes, plaintext.length);
   text[plaintext.length] = '\0';
-  printf("Decrypted message (%ld bytes): %s\n", plaintext.length, text);
+  printf("Decrypted message: %s\n", text);
   free(text);
 
 end:

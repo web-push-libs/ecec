@@ -57,10 +57,17 @@ ece_write_uint48_be(uint8_t* bytes, uint64_t value) {
 static int
 ece_hkdf_sha256(const ece_buf_t* salt, const ece_buf_t* ikm,
                 const ece_buf_t* info, size_t outputLength, ece_buf_t* result) {
+  int err = ECE_OK;
+
   ece_buf_reset(result);
 
-  int err = ECE_OK;
-  EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL);
+  EVP_PKEY_CTX* ctx = NULL;
+  if (salt->length > INT_MAX || ikm->length > INT_MAX ||
+      info->length > INT_MAX) {
+    err = ECE_ERROR_HKDF;
+    goto error;
+  }
+  ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL);
   if (!ctx) {
     err = ECE_ERROR_HKDF;
     goto error;
@@ -73,15 +80,15 @@ ece_hkdf_sha256(const ece_buf_t* salt, const ece_buf_t* ikm,
     err = ECE_ERROR_HKDF;
     goto error;
   }
-  if (EVP_PKEY_CTX_set1_hkdf_salt(ctx, salt->bytes, salt->length) <= 0) {
+  if (EVP_PKEY_CTX_set1_hkdf_salt(ctx, salt->bytes, (int) salt->length) <= 0) {
     err = ECE_ERROR_HKDF;
     goto error;
   }
-  if (EVP_PKEY_CTX_set1_hkdf_key(ctx, ikm->bytes, ikm->length) <= 0) {
+  if (EVP_PKEY_CTX_set1_hkdf_key(ctx, ikm->bytes, (int) ikm->length) <= 0) {
     err = ECE_ERROR_HKDF;
     goto error;
   }
-  if (EVP_PKEY_CTX_add1_hkdf_info(ctx, info->bytes, info->length) <= 0) {
+  if (EVP_PKEY_CTX_add1_hkdf_info(ctx, info->bytes, (int) info->length) <= 0) {
     err = ECE_ERROR_HKDF;
     goto error;
   }
@@ -162,9 +169,11 @@ ece_import_sender_public_key(const ece_buf_t* rawKey) {
   return key;
 }
 
-// Computes the shared secret, used as the input key material (IKM) for HKDF.
+// Computes the ECDH shared secret, used as the input key material (IKM) for
+// HKDF.
 static int
-ece_derive_ikm(EC_KEY* recvPrivKey, EC_KEY* senderPubKey, ece_buf_t* ikm) {
+ece_compute_secret(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
+                   ece_buf_t* sharedSecret) {
   int err = ECE_OK;
 
   const EC_GROUP* recvGroup = EC_KEY_get0_group(recvPrivKey);
@@ -182,19 +191,19 @@ ece_derive_ikm(EC_KEY* recvPrivKey, EC_KEY* senderPubKey, ece_buf_t* ikm) {
     err = ECE_ERROR_COMPUTE_SECRET;
     goto error;
   }
-  if (!ece_buf_alloc(ikm, (fieldSize + 7) / 8)) {
+  if (!ece_buf_alloc(sharedSecret, (fieldSize + 7) / 8)) {
     err = ECE_ERROR_OUT_OF_MEMORY;
     goto error;
   }
-  if (ECDH_compute_key(ikm->bytes, ikm->length, senderPubKeyPt, recvPrivKey,
-                       NULL) <= 0) {
+  if (ECDH_compute_key(sharedSecret->bytes, sharedSecret->length,
+                       senderPubKeyPt, recvPrivKey, NULL) <= 0) {
     err = ECE_ERROR_COMPUTE_SECRET;
     goto error;
   }
   goto end;
 
 error:
-  ece_buf_free(ikm);
+  ece_buf_free(sharedSecret);
 
 end:
   return err;
@@ -317,14 +326,14 @@ ece_aesgcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
   // First, we determine the lengths of the two keys.
   size_t recvPubKeyLength = EC_POINT_point2oct(
       recvGroup, recvPubKeyPt, POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
-  if (!recvPubKeyLength) {
+  if (!recvPubKeyLength || recvPubKeyLength > UINT16_MAX) {
     err = ECE_ERROR_ENCODE_RECEIVER_PUBLIC_KEY;
     goto error;
   }
   size_t senderPubKeyLength =
       EC_POINT_point2oct(senderGroup, senderPubKeyPt,
                          POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
-  if (!senderPubKeyLength) {
+  if (!senderPubKeyLength || senderPubKeyLength > UINT16_MAX) {
     err = ECE_ERROR_ENCODE_SENDER_PUBLIC_KEY;
     goto error;
   }
@@ -342,7 +351,7 @@ ece_aesgcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
   memcpy(info->bytes, prefix, prefixLength);
 
   // Copy the length-prefixed receiver public key.
-  ece_write_uint16_be(&info->bytes[prefixLength], recvPubKeyLength);
+  ece_write_uint16_be(&info->bytes[prefixLength], (uint16_t) recvPubKeyLength);
   size_t bytesWritten = EC_POINT_point2oct(
       recvGroup, recvPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
       &info->bytes[prefixLength + ECE_AESGCM_KEY_LENGTH_SIZE], recvPubKeyLength,
@@ -355,7 +364,7 @@ ece_aesgcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
   // Copy the length-prefixed sender public key.
   ece_write_uint16_be(&info->bytes[prefixLength + recvPubKeyLength +
                                    ECE_AESGCM_KEY_LENGTH_SIZE],
-                      senderPubKeyLength);
+                      (uint16_t) senderPubKeyLength);
   bytesWritten = EC_POINT_point2oct(
       senderGroup, senderPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
       &info->bytes[prefixLength + recvPubKeyLength +
@@ -387,10 +396,10 @@ ece_aesgcm_derive_key_and_nonce(const ece_buf_t* rawRecvPrivKey,
   EC_KEY* recvPrivKey = NULL;
   EC_KEY* senderPubKey = NULL;
 
-  ece_buf_t ikm;
-  ece_buf_reset(&ikm);
-  ece_buf_t secret;
-  ece_buf_reset(&secret);
+  ece_buf_t sharedSecret;
+  ece_buf_reset(&sharedSecret);
+  ece_buf_t prk;
+  ece_buf_reset(&prk);
   ece_buf_t keyInfo;
   ece_buf_reset(&keyInfo);
   ece_buf_t nonceInfo;
@@ -407,20 +416,21 @@ ece_aesgcm_derive_key_and_nonce(const ece_buf_t* rawRecvPrivKey,
     err = ECE_INVALID_SENDER_PUBLIC_KEY;
     goto end;
   }
-  err = ece_derive_ikm(recvPrivKey, senderPubKey, &ikm);
+  err = ece_compute_secret(recvPrivKey, senderPubKey, &sharedSecret);
   if (err) {
     goto end;
   }
 
   // The old "aesgcm" scheme uses a static info string to derive the Web Push
-  // secret. This buffer is stack-allocated, so it shouldn't be freed.
-  uint8_t secretInfoBytes[ECE_AESGCM_WEB_PUSH_SECRET_INFO_LENGTH];
-  memcpy(secretInfoBytes, ECE_AESGCM_WEB_PUSH_SECRET_INFO,
-         ECE_AESGCM_WEB_PUSH_SECRET_INFO_LENGTH);
-  ece_buf_t secretInfo = {.bytes = secretInfoBytes,
-                          .length = ECE_AESGCM_WEB_PUSH_SECRET_INFO_LENGTH};
-  err = ece_hkdf_sha256(authSecret, &ikm, &secretInfo, ECE_SHA_256_LENGTH,
-                        &secret);
+  // PRK. This buffer is stack-allocated, so it shouldn't be freed.
+  uint8_t prkInfoBytes[ECE_AESGCM_WEB_PUSH_PRK_INFO_LENGTH];
+  memcpy(prkInfoBytes, ECE_AESGCM_WEB_PUSH_PRK_INFO,
+         ECE_AESGCM_WEB_PUSH_PRK_INFO_LENGTH);
+  ece_buf_t prkInfo;
+  prkInfo.bytes = prkInfoBytes;
+  prkInfo.length = ECE_AESGCM_WEB_PUSH_PRK_INFO_LENGTH;
+  err = ece_hkdf_sha256(authSecret, &sharedSecret, &prkInfo, ECE_SHA_256_LENGTH,
+                        &prk);
   if (err) {
     goto end;
   }
@@ -433,7 +443,7 @@ ece_aesgcm_derive_key_and_nonce(const ece_buf_t* rawRecvPrivKey,
   if (err) {
     goto end;
   }
-  err = ece_hkdf_sha256(salt, &secret, &keyInfo, ECE_KEY_LENGTH, key);
+  err = ece_hkdf_sha256(salt, &prk, &keyInfo, ECE_KEY_LENGTH, key);
   if (err) {
     goto end;
   }
@@ -443,13 +453,13 @@ ece_aesgcm_derive_key_and_nonce(const ece_buf_t* rawRecvPrivKey,
   if (err) {
     goto end;
   }
-  err = ece_hkdf_sha256(salt, &secret, &nonceInfo, ECE_NONCE_LENGTH, nonce);
+  err = ece_hkdf_sha256(salt, &prk, &nonceInfo, ECE_NONCE_LENGTH, nonce);
 
 end:
   EC_KEY_free(recvPrivKey);
   EC_KEY_free(senderPubKey);
-  ece_buf_free(&ikm);
-  ece_buf_free(&secret);
+  ece_buf_free(&sharedSecret);
+  ece_buf_free(&prk);
   ece_buf_free(&keyInfo);
   ece_buf_free(&nonceInfo);
   return err;
@@ -468,12 +478,12 @@ ece_aes128gcm_derive_key_and_nonce(const ece_buf_t* rawRecvPrivKey,
   EC_KEY* recvPrivKey = NULL;
   EC_KEY* senderPubKey = NULL;
 
-  ece_buf_t ikm;
-  ece_buf_reset(&ikm);
-  ece_buf_t secretInfo;
-  ece_buf_reset(&secretInfo);
-  ece_buf_t secret;
-  ece_buf_reset(&secret);
+  ece_buf_t sharedSecret;
+  ece_buf_reset(&sharedSecret);
+  ece_buf_t prkInfo;
+  ece_buf_reset(&prkInfo);
+  ece_buf_t prk;
+  ece_buf_reset(&prk);
 
   // Import the raw receiver private key and sender public key.
   recvPrivKey = ece_import_receiver_private_key(rawRecvPrivKey);
@@ -486,21 +496,21 @@ ece_aes128gcm_derive_key_and_nonce(const ece_buf_t* rawRecvPrivKey,
     err = ECE_INVALID_SENDER_PUBLIC_KEY;
     goto end;
   }
-  err = ece_derive_ikm(recvPrivKey, senderPubKey, &ikm);
+  err = ece_compute_secret(recvPrivKey, senderPubKey, &sharedSecret);
   if (err) {
     goto end;
   }
 
   // The new "aes128gcm" scheme includes the sender and receiver public keys in
-  // the info string when deriving the Web Push secret.
+  // the info string when deriving the Web Push PRK.
   err = ece_aes128gcm_generate_info(
-      recvPrivKey, senderPubKey, ECE_AES128GCM_WEB_PUSH_SECRET_INFO_PREFIX,
-      ECE_AES128GCM_WEB_PUSH_SECRET_INFO_PREFIX_LENGTH, &secretInfo);
+      recvPrivKey, senderPubKey, ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX,
+      ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX_LENGTH, &prkInfo);
   if (err) {
     goto end;
   }
-  err = ece_hkdf_sha256(authSecret, &ikm, &secretInfo, ECE_SHA_256_LENGTH,
-                        &secret);
+  err = ece_hkdf_sha256(authSecret, &sharedSecret, &prkInfo, ECE_SHA_256_LENGTH,
+                        &prk);
   if (err) {
     goto end;
   }
@@ -509,25 +519,27 @@ ece_aes128gcm_derive_key_and_nonce(const ece_buf_t* rawRecvPrivKey,
   // These buffers are stack-allocated, so they shouldn't be freed.
   uint8_t keyInfoBytes[ECE_AES128GCM_KEY_INFO_LENGTH];
   memcpy(keyInfoBytes, ECE_AES128GCM_KEY_INFO, ECE_AES128GCM_KEY_INFO_LENGTH);
-  ece_buf_t keyInfo = {.bytes = keyInfoBytes,
-                       .length = ECE_AES128GCM_KEY_INFO_LENGTH};
-  err = ece_hkdf_sha256(salt, &secret, &keyInfo, ECE_KEY_LENGTH, key);
+  ece_buf_t keyInfo;
+  keyInfo.bytes = keyInfoBytes;
+  keyInfo.length = ECE_AES128GCM_KEY_INFO_LENGTH;
+  err = ece_hkdf_sha256(salt, &prk, &keyInfo, ECE_KEY_LENGTH, key);
   if (err) {
     goto end;
   }
   uint8_t nonceInfoBytes[ECE_AES128GCM_NONCE_INFO_LENGTH];
   memcpy(nonceInfoBytes, ECE_AES128GCM_NONCE_INFO,
          ECE_AES128GCM_NONCE_INFO_LENGTH);
-  ece_buf_t nonceInfo = {.bytes = nonceInfoBytes,
-                         .length = ECE_AES128GCM_NONCE_INFO_LENGTH};
-  err = ece_hkdf_sha256(salt, &secret, &nonceInfo, ECE_NONCE_LENGTH, nonce);
+  ece_buf_t nonceInfo;
+  nonceInfo.bytes = nonceInfoBytes;
+  nonceInfo.length = ECE_AES128GCM_NONCE_INFO_LENGTH;
+  err = ece_hkdf_sha256(salt, &prk, &nonceInfo, ECE_NONCE_LENGTH, nonce);
 
 end:
   EC_KEY_free(recvPrivKey);
   EC_KEY_free(senderPubKey);
-  ece_buf_free(&ikm);
-  ece_buf_free(&secretInfo);
-  ece_buf_free(&secret);
+  ece_buf_free(&sharedSecret);
+  ece_buf_free(&prkInfo);
+  ece_buf_free(&prk);
   return err;
 }
 
@@ -550,7 +562,12 @@ ece_decrypt_record(const ece_buf_t* key, const ece_buf_t* nonce, size_t counter,
                    const ece_buf_t* record, ece_buf_t* block) {
   int err = ECE_OK;
 
-  EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+  EVP_CIPHER_CTX* ctx = NULL;
+  if (record->length > INT_MAX) {
+    err = ECE_ERROR_DECRYPT;
+    goto end;
+  }
+  ctx = EVP_CIPHER_CTX_new();
   if (!ctx) {
     err = ECE_ERROR_OUT_OF_MEMORY;
     goto end;
@@ -571,7 +588,7 @@ ece_decrypt_record(const ece_buf_t* key, const ece_buf_t* nonce, size_t counter,
   }
   int blockLength = 0;
   if (EVP_DecryptUpdate(ctx, block->bytes, &blockLength, record->bytes,
-                        record->length - ECE_TAG_LENGTH) <= 0 ||
+                        (int) record->length - ECE_TAG_LENGTH) <= 0 ||
       blockLength < 0) {
     err = ECE_ERROR_DECRYPT;
     goto end;
@@ -659,6 +676,7 @@ end:
 // Removes padding from a decrypted "aesgcm" block.
 static int
 ece_aesgcm_unpad(ece_buf_t* block, bool isLastRecord) {
+  ECE_UNUSED(isLastRecord);
   if (block->length < ECE_AESGCM_PAD_SIZE) {
     return ECE_ERROR_DECRYPT_PADDING;
   }

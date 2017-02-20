@@ -281,9 +281,9 @@ ece_header_extract_params(const char* header) {
   if (!params) {
     goto error;
   }
-  ece_header_parser_t parser = {
-      .state = ECE_HEADER_STATE_BEGIN_NAME, .params = params,
-  };
+  ece_header_parser_t parser;
+  parser.state = ECE_HEADER_STATE_BEGIN_NAME;
+  parser.params = params;
   const char* input = header;
   while (*input) {
     if (ece_header_parse(&parser, input)) {

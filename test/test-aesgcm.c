@@ -165,11 +165,14 @@ test_valid_crypto_params() {
     ece_assert(err == ECE_OK, "%s: Error %d extracting params", t.desc, err);
     ece_assert(rs == t.rs, "%s: Want rs = %d; got %d", t.desc, t.rs, rs);
 
-    ece_buf_t expectedSalt = {.bytes = t.salt, .length = 8};
+    ece_buf_t expectedSalt;
+    expectedSalt.bytes = t.salt;
+    expectedSalt.length = 8;
     ece_assert_bufs_equal(&salt, &expectedSalt, t.desc);
 
-    ece_buf_t expectedRawSenderPubKey = {.bytes = t.rawSenderPubKey,
-                                         .length = 8};
+    ece_buf_t expectedRawSenderPubKey;
+    expectedRawSenderPubKey.bytes = t.rawSenderPubKey;
+    expectedRawSenderPubKey.length = 8;
     ece_assert_bufs_equal(&rawSenderPubKey, &expectedRawSenderPubKey, t.desc);
 
     ece_buf_free(&salt);

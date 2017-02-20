@@ -5,7 +5,6 @@ set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_EXTENSIONS OFF)
 set(C_STANDARD_REQUIRED ON)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -pedantic -Werror")
 
 include(GNUInstallDirs)
 
@@ -48,3 +47,11 @@ target_link_libraries(ece-test ece)
 add_test(NAME ece-test COMMAND ece-test)
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND})
 add_dependencies(check ece-test)
+
+if(MSVC)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W4 /WX")
+  target_compile_definitions(ece PUBLIC
+    "_CRT_SECURE_NO_WARNINGS")
+else()
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -pedantic -Werror")
+endif()
