@@ -54,6 +54,8 @@ ece_write_uint48_be(uint8_t* bytes, uint64_t value) {
 }
 
 // HKDF from RFC 5869: `HKDF-Expand(HKDF-Extract(salt, ikm), info, length)`.
+// This function does not reset or free `result` on error; its callers already
+// handle that.
 static int
 ece_hkdf_sha256(const ece_buf_t* salt, const ece_buf_t* ikm,
                 const ece_buf_t* info, size_t outputLen, ece_buf_t* result) {
@@ -63,46 +65,42 @@ ece_hkdf_sha256(const ece_buf_t* salt, const ece_buf_t* ikm,
   if (salt->length > INT_MAX || ikm->length > INT_MAX ||
       info->length > INT_MAX) {
     err = ECE_ERROR_HKDF;
-    goto error;
+    goto end;
   }
   ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL);
   if (!ctx) {
     err = ECE_ERROR_HKDF;
-    goto error;
+    goto end;
   }
   if (EVP_PKEY_derive_init(ctx) <= 0) {
     err = ECE_ERROR_HKDF;
-    goto error;
+    goto end;
   }
   if (EVP_PKEY_CTX_set_hkdf_md(ctx, EVP_sha256()) <= 0) {
     err = ECE_ERROR_HKDF;
-    goto error;
+    goto end;
   }
   if (EVP_PKEY_CTX_set1_hkdf_salt(ctx, salt->bytes, (int) salt->length) <= 0) {
     err = ECE_ERROR_HKDF;
-    goto error;
+    goto end;
   }
   if (EVP_PKEY_CTX_set1_hkdf_key(ctx, ikm->bytes, (int) ikm->length) <= 0) {
     err = ECE_ERROR_HKDF;
-    goto error;
+    goto end;
   }
   if (EVP_PKEY_CTX_add1_hkdf_info(ctx, info->bytes, (int) info->length) <= 0) {
     err = ECE_ERROR_HKDF;
-    goto error;
+    goto end;
   }
   if (!ece_buf_alloc(result, outputLen)) {
     err = ECE_ERROR_OUT_OF_MEMORY;
-    goto error;
+    goto end;
   }
   if (EVP_PKEY_derive(ctx, result->bytes, &result->length) <= 0 ||
       result->length != outputLen) {
     err = ECE_ERROR_HKDF;
-    goto error;
+    goto end;
   }
-  goto end;
-
-error:
-  ece_buf_free(result);
 
 end:
   EVP_PKEY_CTX_free(ctx);
