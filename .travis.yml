@@ -20,20 +20,35 @@ cache:
 env:
   global:
     - OPENSSL_VERSION=1.1.0e
+    - LCOV_VERSION=1.13
+    - PATH=$HOME/.local/bin:$PATH
 
 before_install:
   - "[ -f $HOME/.src/openssl-$OPENSSL_VERSION.tar.gz ] || wget -P $HOME/.src https://www.openssl.org/source/openssl-$OPENSSL_VERSION.tar.gz"
+  - "[ -f $HOME/.src/lcov-$LCOV_VERSION.tar.gz ] || wget -P $HOME/.src https://github.com/linux-test-project/lcov/releases/download/v$LCOV_VERSION/lcov-$LCOV_VERSION.tar.gz"
 
 install:
+  - mkdir $HOME/.deps
+  - pushd $HOME/.deps
   - tar xzf $HOME/.src/openssl-$OPENSSL_VERSION.tar.gz
   - pushd openssl-$OPENSSL_VERSION
   - env CC="ccache cc" CXX="ccache c++" ./config --prefix=$HOME/.local > build.log 2>&1 || (cat build.log && exit 1)
   - make > build.log 2>&1 || (cat build.log && exit 1)
   - make install > build.log 2>&1 || (cat build.log && exit 1)
   - popd
+  - tar xzf $HOME/.src/lcov-$LCOV_VERSION.tar.gz
+  - pushd lcov-$LCOV_VERSION
+  - make -e PREFIX=$HOME/.local install > build.log 2>&1 || (cat build.log && exit 1)
+  - popd
+  - popd
 
 script:
   - mkdir build
-  - cd build
-  - cmake -DOPENSSL_ROOT_DIR=$HOME/.local ..
+  - pushd build
+  - env COVERAGE=1 cmake -DOPENSSL_ROOT_DIR=$HOME/.local ..
   - env CTEST_OUTPUT_ON_FAILURE=1 make check
+  - popd
+
+after_success:
+  - lcov --directory . --no-external --capture --output-file coverage.info
+  - bash <(curl -s https://codecov.io/bash) -X gcov -X coveragepy
