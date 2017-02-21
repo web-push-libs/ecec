@@ -9,9 +9,9 @@ Currently, **ecec** only implements enough to support decrypting [Web Push messa
 
 Encryption and usage without ECDH are planned for future releases. In the meantime, please have a look at `tools/ece-decrypt` for an example of how to use the library, or read on.
 
-## How the scheme works
+## What is encrypted content-coding?
 
-Like [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security), the encrypted content-coding scheme uses Diffie-Hellman key exchange to derive a shared secret, which, in turn, is used to derive a symmetric encryption key for a block cipher. This scheme uses [ECDH](https://en.wikipedia.org/wiki/Elliptic_curve_Diffie-Hellman) for key exchange, and [AES](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard) [GCM](https://en.wikipedia.org/wiki/Galois/Counter_Mode) for the block cipher.
+Like [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security), encrypted content-coding uses Diffie-Hellman key exchange to derive a shared secret, which, in turn, is used to derive a symmetric encryption key for a block cipher. This encoding uses [ECDH](https://en.wikipedia.org/wiki/Elliptic_curve_Diffie-Hellman) for key exchange, and [AES](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard) [GCM](https://en.wikipedia.org/wiki/Galois/Counter_Mode) for the block cipher.
 
 Key exchange is a process where a sender and a receiver generate public-private key pairs, then exchange public keys. The sender combines the receiver's public key with its own private key to obtain a secret. Meanwhile, the receiver combines the sender's public key with its private key to obtain the same secret. [Wikipedia](https://en.wikipedia.org/wiki/Diffie–Hellman_key_exchange) has a good visual explanation.
 
@@ -29,19 +29,26 @@ To decrypt the message, the receiver chunks the ciphertext into N encrypted reco
 
 In Web Push, the app server is the sender, and the browser ("user agent") is the receiver. The browser generates a public-private ECDH key pair and 16-byte auth secret for each push subscription. These keys are static; they're used to decrypt all messages sent to this subscription. The browser exposes the subscription endpoint, public key, and auth secret to the web app via the [Push DOM API](https://w3c.github.io/push-api/). The web app then delivers the endpoint and keys to the app server.
 
-When the app server wants to send a push message, it generates its own public-private key pair, and computes the shared ECDH secret using the subscription public key. This key pair is ephemeral; it should be discarded after the message is sent. The app server encrypts the payload using the process outlined above, and includes the salt, ephemeral public key, and ciphertext in a `POST` request to the endpoint. The push endpoint relays the encrypted payload to the browser. Finally, the browser decrypts the payload with the subscription private key, and delivers the plaintext to the web app. Because the endpoint doesn't know the private key, it can't decrypt or tamper with the message.
+When the app server wants to send a push message, it generates its own public-private key pair, and computes the shared ECDH secret using the subscription public key. This key pair is ephemeral: it should be discarded after the message is sent, and a new key pair used for the next message. The app server encrypts the payload using the process outlined above, and includes the salt, sender public key, and ciphertext in a `POST` request to the endpoint. The push endpoint relays the encrypted payload to the browser. Finally, the browser decrypts the payload with the subscription private key, and delivers the plaintext to the web app. Because the endpoint doesn't know the private key, it can't decrypt or tamper with the message.
+
+## Usage
 
 ### `aesgcm`
 
-All [Web Push libraries](https://github.com/web-push-libs) support the "aesgcm" scheme, as well as Firefox 46+ and Chrome 50+. The app server includes the ephemeral public key in the `Crypto-Key` HTTP header, the salt and record size in the `Encryption` header, and the encrypted payload in the body of the `POST` request.
+All [Web Push libraries](https://github.com/web-push-libs) support the "aesgcm" scheme, as well as Firefox 46+ and Chrome 50+. The app server includes its public key in the `Crypto-Key` HTTP header, the salt and record size in the `Encryption` header, and the encrypted payload in the body of the `POST` request.
+
+* The `Crypto-Key` header comprises one or more comma-delimited parameters. The first parameter must include a `dh` name-value pair, containing the sender's Base64url-encoded public key.
+* The `Encryption` header must include a `salt` name-value pair containing the sender's Base64url-encoded salt, and an optional `rs` pair specifying the record size.
+
+If the `Crypto-Key` header contains multiple keys, the sender must also include a `keyid` to match the encryption parameters to the key. The drafts have examples for [a single key without a `keyid`](https://tools.ietf.org/html/draft-ietf-webpush-encryption-04#section-5), and [multiple keys with `keyid`s](https://tools.ietf.org/html/draft-ietf-httpbis-encryption-encoding-02#section-5.6).
+
+**ecec** will extract the relevant parameters from the `Crypto-Key` and `Encryption` headers before decrypting the message. You don't need to parse the headers yourself.
 
 The other difference from `aes128gcm` is how `prkInfo`, `keyInfo`, and `nonceInfo` are determined:
 
 * `prkInfo` is the static string `"Content-Encoding: auth\0"`.
-* `keyInfo` is `"Content-Encoding: aesgcm\0P-256\0"`, followed by the length-prefixed (unsigned 16-bit integers) static and ephemeral public keys in uncompressed form.
+* `keyInfo` is `"Content-Encoding: aesgcm\0P-256\0"`, followed by the length-prefixed (unsigned 16-bit integers) receiver and sender public keys in uncompressed form.
 * `nonceInfo` is `"Content-Encoding: nonce\0P-256\0"`, followed by the length-prefixed keys in the same form as `keyInfo`.
-
-**ecec** will automatically extract the relevant parameters from the `Crypto-Key` and `Encryption` headers, and decrypt the message.
 
 ```c
 int
@@ -52,11 +59,11 @@ ece_aesgcm_decrypt(const ece_buf_t* rawRecvPrivKey, const ece_buf_t* authSecret,
 
 ### `aes128gcm`
 
-This is the scheme from the latest version of the encrypted content-coding draft. It's not currently supported by any encryption library or browser, but will eventually replace `aesgcm`. This scheme removes the `Crypto-Key` and `Encryption` headers. Instead, the salt, record size, and ephemeral public key are included in the payload as a binary header block.
+This is the scheme from the latest version of the encrypted content-coding draft. It's not currently supported by any encryption library or browser, but will eventually replace `aesgcm`. This scheme removes the `Crypto-Key` and `Encryption` headers. Instead, the salt, record size, and sender public key are included in the payload as a binary header block.
 
 Additionally:
 
-* `prkInfo` is the string `"WebPush: info\0"`, followed by the static and ephemeral public keys in uncompressed form. Unlike `aesgcm`, these are not length-prefixed.
+* `prkInfo` is the string `"WebPush: info\0"`, followed by the receiver and sender public keys in uncompressed form. Unlike `aesgcm`, these are not length-prefixed.
 * `keyInfo` is the static string `"Content-Encoding: aes128gcm\0"`.
 * `nonceInfo` is the static string `"Content-Encoding: nonce\0"`.
 
