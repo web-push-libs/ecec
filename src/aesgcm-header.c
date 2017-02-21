@@ -5,6 +5,7 @@
 // includes the relevant information in a binary header, directly in the
 // payload.
 
+#include <assert.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,9 +32,9 @@ typedef struct ece_header_pairs_s {
   // `strncmp`. Functions that assume a NUL-terminated string will read until
   // the end of the backing string.
   const char* name;
-  size_t nameLength;
+  size_t nameLen;
   const char* value;
-  size_t valueLength;
+  size_t valueLen;
   struct ece_header_pairs_s* next;
 } ece_header_pairs_t;
 
@@ -47,9 +48,9 @@ ece_header_pairs_alloc(ece_header_pairs_t* head) {
     return NULL;
   }
   pairs->name = NULL;
-  pairs->nameLength = 0;
+  pairs->nameLen = 0;
   pairs->value = NULL;
-  pairs->valueLength = 0;
+  pairs->valueLen = 0;
   pairs->next = head;
   return pairs;
 }
@@ -57,21 +58,21 @@ ece_header_pairs_alloc(ece_header_pairs_t* head) {
 // Indicates whether a name-value pair node matches the `name`.
 static inline bool
 ece_header_pairs_has_name(ece_header_pairs_t* pair, const char* name) {
-  return !strncmp(pair->name, name, pair->nameLength);
+  return !strncmp(pair->name, name, pair->nameLen);
 }
 
 // Indicates whether a name-value pair node matches the `value`.
 static inline bool
 ece_header_pairs_has_value(ece_header_pairs_t* pair, const char* value) {
-  return !strncmp(pair->value, value, pair->valueLength);
+  return !strncmp(pair->value, value, pair->valueLen);
 }
 
 // Copies a pair node's value into a C string.
 static char*
 ece_header_pairs_value_to_str(ece_header_pairs_t* pair) {
-  char* value = (char*) malloc(pair->valueLength + 1);
-  strncpy(value, pair->value, pair->valueLength);
-  value[pair->valueLength] = '\0';
+  char* value = (char*) malloc(pair->valueLen + 1);
+  strncpy(value, pair->value, pair->valueLen);
+  value[pair->valueLen] = '\0';
   return value;
 }
 
@@ -183,7 +184,7 @@ ece_header_parse(ece_header_parser_t* parser, const char* input) {
 
   case ECE_HEADER_STATE_NAME:
     if (ece_header_is_valid_pair_name(*input)) {
-      parser->params->pairs->nameLength++;
+      parser->params->pairs->nameLen++;
       return true;
     }
     if (ece_header_is_space(*input) || *input == '=') {
@@ -226,7 +227,7 @@ ece_header_parse(ece_header_parser_t* parser, const char* input) {
       return false;
     }
     if (ece_header_is_valid_pair_value(*input)) {
-      parser->params->pairs->valueLength++;
+      parser->params->pairs->valueLen++;
       return true;
     }
     break;
@@ -240,7 +241,7 @@ ece_header_parse(ece_header_parser_t* parser, const char* input) {
       // Quoted strings allow spaces and escapes, but neither `Crypto-Key` nor
       // `Encryption` accept them. We keep the parser simple by rejecting
       // non-Base64url characters here.
-      parser->params->pairs->valueLength++;
+      parser->params->pairs->valueLen++;
       return true;
     }
     break;
@@ -268,6 +269,10 @@ ece_header_parse(ece_header_parser_t* parser, const char* input) {
       return true;
     }
     break;
+
+  default:
+    // Unexpected parser state.
+    assert(false);
   }
   parser->state = ECE_HEADER_STATE_INVALID_HEADER;
   return false;
@@ -364,8 +369,8 @@ ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
     }
     if (ece_header_pairs_has_name(pair, "salt")) {
       // The salt is required, and must be Base64url-encoded without padding.
-      if (ece_base64url_decode(pair->value, pair->valueLen, REJECT_PADDING,
-                               salt)) {
+      if (ece_base64url_decode(pair->value, pair->valueLen,
+                               ECE_BASE64URL_REJECT_PADDING, salt)) {
         err = ECE_ERROR_INVALID_SALT;
         goto error;
       }
@@ -418,8 +423,8 @@ ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
       continue;
     }
     // The sender's public key must be Base64url-encoded without padding.
-    if (ece_base64url_decode(pair->value, pair->valueLength, REJECT_PADDING,
-                             rawSenderPubKey)) {
+    if (ece_base64url_decode(pair->value, pair->valueLen,
+                             ECE_BASE64URL_REJECT_PADDING, rawSenderPubKey)) {
       err = ECE_ERROR_INVALID_DH;
       goto error;
     }

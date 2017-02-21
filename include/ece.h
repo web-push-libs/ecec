@@ -53,6 +53,7 @@ extern "C" {
 #define ECE_ERROR_INVALID_RS -17
 #define ECE_ERROR_INVALID_SALT -18
 #define ECE_ERROR_INVALID_DH -19
+#define ECE_ERROR_INVALID_BASE64URL -20
 
 // Annotates a variable or parameter as unused to avoid compiler warnings.
 #define ECE_UNUSED(x) (void) (x)
@@ -63,17 +64,18 @@ typedef struct ece_buf_s {
   size_t length;
 } ece_buf_t;
 
+// The policy for handling trailing "=" characters in Base64url-encoded input.
 typedef enum ece_base64url_decode_policy_e {
   // Fails decoding if the input is unpadded. RFC 4648, section 3.2 requires
   // padding, unless the referring specification prohibits it.
-  REQUIRE_PADDING,
+  ECE_BASE64URL_REQUIRE_PADDING,
 
   // Tolerates padded and unpadded input.
-  IGNORE_PADDING,
+  ECE_BASE64URL_IGNORE_PADDING,
 
   // Fails decoding if the input is padded. This follows the strict Base64url
   // variant used in JWS (RFC 7515, Appendix C) and Web Push Message Encryption.
-  REJECT_PADDING,
+  ECE_BASE64URL_REJECT_PADDING,
 } ece_base64url_decode_policy_t;
 
 // Decrypts a payload encrypted with the "aes128gcm" scheme.

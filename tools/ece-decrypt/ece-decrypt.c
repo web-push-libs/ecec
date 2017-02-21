@@ -22,20 +22,20 @@ main(int argc, char** argv) {
   ece_buf_t plaintext;
   ece_buf_reset(&plaintext);
 
-  err = ece_base64url_decode(argv[1], strlen(argv[1]), REJECT_PADDING,
-                             &authSecret);
+  err = ece_base64url_decode(argv[1], strlen(argv[1]),
+                             ECE_BASE64URL_REJECT_PADDING, &authSecret);
   if (err) {
     fprintf(stderr, "Error: Failed to Base64url-decode auth secret: %d\n", err);
     goto end;
   }
-  err = ece_base64url_decode(argv[2], strlen(argv[2]), REJECT_PADDING,
-                             &rawRecvPrivKey);
+  err = ece_base64url_decode(argv[2], strlen(argv[2]),
+                             ECE_BASE64URL_REJECT_PADDING, &rawRecvPrivKey);
   if (err) {
     fprintf(stderr, "Error: Failed to Base64url-decode private key: %d\n", err);
     goto end;
   }
-  err =
-      ece_base64url_decode(argv[3], strlen(argv[3]), REJECT_PADDING, &payload);
+  err = ece_base64url_decode(argv[3], strlen(argv[3]),
+                             ECE_BASE64URL_REJECT_PADDING, &payload);
   if (err) {
     fprintf(stderr, "Error: Failed to Base64url-decode message: %d\n", err);
     goto end;

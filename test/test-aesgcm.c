@@ -207,20 +207,21 @@ test_valid_ciphertexts() {
     valid_ciphertext_test_t t = valid_ciphertext_tests[i];
 
     ece_buf_t rawRecvPrivKey;
-    int err = ece_base64url_decode(t.recvPrivKey, strlen(t.recvPrivKey),
-                                   REJECT_PADDING, &rawRecvPrivKey);
+    int err =
+        ece_base64url_decode(t.recvPrivKey, strlen(t.recvPrivKey),
+                             ECE_BASE64URL_REJECT_PADDING, &rawRecvPrivKey);
     ece_assert(!err, "%s: Failed to Base64url-decode private key: %d", t.desc,
                err);
 
     ece_buf_t authSecret;
     err = ece_base64url_decode(t.authSecret, strlen(t.authSecret),
-                               REJECT_PADDING, &authSecret);
+                               ECE_BASE64URL_REJECT_PADDING, &authSecret);
     ece_assert(!err, "%s: Failed to Base64url-decode auth secret: %d", t.desc,
                err);
 
     ece_buf_t ciphertext;
     err = ece_base64url_decode(t.ciphertext, strlen(t.ciphertext),
-                               REJECT_PADDING, &ciphertext);
+                               ECE_BASE64URL_REJECT_PADDING, &ciphertext);
     ece_assert(!err, "%s: Failed to Base64url-decode ciphertext: %d", t.desc,
                err);
 
