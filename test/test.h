@@ -30,3 +30,9 @@ ece_aesgcm_test_invalid_crypto_params();
 
 void
 ece_aesgcm_test_valid_ciphertexts();
+
+void
+ece_aes128gcm_test_valid_payloads();
+
+void
+ece_base64url_test_decode();

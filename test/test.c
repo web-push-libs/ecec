@@ -9,6 +9,11 @@ main() {
   ece_aesgcm_test_valid_crypto_params();
   ece_aesgcm_test_invalid_crypto_params();
   ece_aesgcm_test_valid_ciphertexts();
+
+  ece_aes128gcm_test_valid_payloads();
+
+  ece_base64url_test_decode();
+
   return 0;
 }
 
