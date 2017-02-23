@@ -1,4 +1,4 @@
-#include "harness.h"
+#include "test.h"
 
 #include <string.h>
 
@@ -145,10 +145,22 @@ static valid_ciphertext_test_t valid_ciphertext_tests[] = {
                      "fYHBP4ObxwJNl56bk",
         .encryption = "salt=5LIDBXbvkBvvb7ZdD-T4PQ; rs=3",
     },
+    {
+        .desc = "Example from draft-ietf-httpbis-encryption-encoding-02",
+        .plaintext = "I am the walrus",
+        .recvPrivKey = "9FWl15_QUQAWDaD3k3l50ZBZQJ4au27F1V4F0uLSD_M",
+        .authSecret = "R29vIGdvbyBnJyBqb29iIQ",
+        .ciphertext = "6nqAQUME8hNqw5J3kl8cpVVJylXKYqZOeseZG8UueKpA",
+        .cryptoKey = "keyid=\"dhkey\"; "
+                     "dh="
+                     "\"BNoRDbb84JGm8g5Z5CFxurSqsXWJ11ItfXEWYVLE85Y7CYkDjXsIEc4"
+                     "aqxYaQ1G8BqkXCJ6DPpDrWtdWj_mugHU\"",
+        .encryption = "keyid=\"dhkey\"; salt=\"lngarbyKfMoi9Z75xYXmkg\"",
+    },
 };
 
-static void
-test_valid_crypto_params() {
+void
+ece_aesgcm_test_valid_crypto_params() {
   size_t length = sizeof(valid_param_tests) / sizeof(valid_param_test_t);
   for (size_t i = 0; i < length; i++) {
     valid_param_test_t t = valid_param_tests[i];
@@ -178,8 +190,8 @@ test_valid_crypto_params() {
   }
 }
 
-static void
-test_invalid_crypto_params() {
+void
+ece_aesgcm_test_invalid_crypto_params() {
   size_t length = sizeof(invalid_param_tests) / sizeof(invalid_param_test_t);
   for (size_t i = 0; i < length; i++) {
     invalid_param_test_t t = invalid_param_tests[i];
@@ -199,8 +211,8 @@ test_invalid_crypto_params() {
   }
 }
 
-static void
-test_valid_ciphertexts() {
+void
+ece_aesgcm_test_valid_ciphertexts() {
   size_t length =
       sizeof(valid_ciphertext_tests) / sizeof(valid_ciphertext_test_t);
   for (size_t i = 0; i < length; i++) {
@@ -238,12 +250,4 @@ test_valid_ciphertexts() {
     ece_buf_free(&ciphertext);
     ece_buf_free(&plaintext);
   }
-}
-
-int
-main() {
-  test_valid_crypto_params();
-  test_invalid_crypto_params();
-  test_valid_ciphertexts();
-  return 0;
 }

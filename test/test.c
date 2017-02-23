@@ -1,8 +1,16 @@
-#include "harness.h"
+#include "test.h"
 
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
+
+int
+main() {
+  ece_aesgcm_test_valid_crypto_params();
+  ece_aesgcm_test_invalid_crypto_params();
+  ece_aesgcm_test_valid_ciphertexts();
+  return 0;
+}
 
 void
 ece_assert_bufs_equal(ece_buf_t* a, ece_buf_t* b, const char* desc) {

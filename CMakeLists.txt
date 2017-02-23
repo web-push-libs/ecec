@@ -37,8 +37,8 @@ target_include_directories(ece-decrypt PUBLIC tools/ece-decrypt)
 target_link_libraries(ece-decrypt ece)
 
 set(ECE_TEST_SOURCES
-  test/harness.c
-  test/test-aesgcm.c)
+  test/aesgcm.c
+  test/test.c)
 add_executable(ece-test ${ECE_TEST_SOURCES})
 set_target_properties(ece-test PROPERTIES EXCLUDE_FROM_ALL 1)
 target_include_directories(ece-test PUBLIC test)

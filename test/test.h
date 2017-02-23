@@ -21,3 +21,12 @@ ece_assert_bufs_equal(ece_buf_t* a, ece_buf_t* b, const char* desc);
 void
 ece_report(const char* funcName, int line, const char* expr, const char* format,
            ...);
+
+void
+ece_aesgcm_test_valid_crypto_params();
+
+void
+ece_aesgcm_test_invalid_crypto_params();
+
+void
+ece_aesgcm_test_valid_ciphertexts();
