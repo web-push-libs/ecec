@@ -41,7 +41,7 @@ main(int argc, char** argv) {
     goto end;
   }
   err =
-      ece_aes128gcm_decrypt(&rawRecvPrivKey, &authSecret, &payload, &plaintext);
+    ece_aes128gcm_decrypt(&rawRecvPrivKey, &authSecret, &payload, &plaintext);
   if (err) {
     fprintf(stderr, "Error: Failed to decrypt message: %d\n", err);
     goto end;

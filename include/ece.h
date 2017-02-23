@@ -81,35 +81,35 @@ typedef enum ece_base64url_decode_policy_e {
 // Decrypts a payload encrypted with the "aes128gcm" scheme.
 int
 ece_aes128gcm_decrypt(
-    // The ECDH private key for the push subscription, encoded as an octet
-    // string.
-    const ece_buf_t* rawRecvPrivKey,
-    // The 16-byte shared authentication secret.
-    const ece_buf_t* authSecret,
-    // The encrypted payload.
-    const ece_buf_t* payload,
-    // An in-out parameter to hold the plaintext. The buffer is reset before
-    // decryption, and freed if an error occurs. If decryption succeeds, the
-    // caller takes ownership of the buffer, and should free it when it's done.
-    ece_buf_t* plaintext);
+  // The ECDH private key for the push subscription, encoded as an octet
+  // string.
+  const ece_buf_t* rawRecvPrivKey,
+  // The 16-byte shared authentication secret.
+  const ece_buf_t* authSecret,
+  // The encrypted payload.
+  const ece_buf_t* payload,
+  // An in-out parameter to hold the plaintext. The buffer is reset before
+  // decryption, and freed if an error occurs. If decryption succeeds, the
+  // caller takes ownership of the buffer, and should free it when it's done.
+  ece_buf_t* plaintext);
 
 // Decrypts a payload encrypted with the "aesgcm" scheme.
 int
 ece_aesgcm_decrypt(
-    // The ECDH private key for the push subscription, encoded as an octet
-    // string.
-    const ece_buf_t* rawRecvPrivKey,
-    // The 16-byte shared authentication secret.
-    const ece_buf_t* authSecret,
-    // The value of the sender's `Crypto-Key` HTTP header.
-    const char* cryptoKeyHeader,
-    // The value of the sender's `Encryption` HTTP header.
-    const char* encryptionHeader,
-    // The encrypted message.
-    const ece_buf_t* ciphertext,
-    // An in-out parameter to hold the plaintext. The same ownership rules apply
-    // as for `ece_aes128gcm_decrypt`.
-    ece_buf_t* plaintext);
+  // The ECDH private key for the push subscription, encoded as an octet
+  // string.
+  const ece_buf_t* rawRecvPrivKey,
+  // The 16-byte shared authentication secret.
+  const ece_buf_t* authSecret,
+  // The value of the sender's `Crypto-Key` HTTP header.
+  const char* cryptoKeyHeader,
+  // The value of the sender's `Encryption` HTTP header.
+  const char* encryptionHeader,
+  // The encrypted message.
+  const ece_buf_t* ciphertext,
+  // An in-out parameter to hold the plaintext. The same ownership rules apply
+  // as for `ece_aes128gcm_decrypt`.
+  ece_buf_t* plaintext);
 
 // Extracts the ephemeral public key, salt, and record size from the sender's
 // `Crypto-Key` and `Encryption` headers. The caller takes ownership of `salt`

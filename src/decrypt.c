@@ -240,13 +240,13 @@ ece_aes128gcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
 
   // First, we determine the lengths of the two keys.
   size_t recvPubKeyLen = EC_POINT_point2oct(
-      recvGrp, recvPubKeyPt, POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
+    recvGrp, recvPubKeyPt, POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
   if (!recvPubKeyLen) {
     err = ECE_ERROR_ENCODE_RECEIVER_PUBLIC_KEY;
     goto error;
   }
   size_t senderPubKeyLen = EC_POINT_point2oct(
-      senderGrp, senderPubKeyPt, POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
+    senderGrp, senderPubKeyPt, POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
   if (!senderPubKeyLen) {
     err = ECE_ERROR_ENCODE_SENDER_PUBLIC_KEY;
     goto error;
@@ -264,8 +264,8 @@ ece_aes128gcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
 
   // Copy the receiver public key.
   size_t bytesWritten =
-      EC_POINT_point2oct(recvGrp, recvPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
-                         &info->bytes[prefixLen], recvPubKeyLen, NULL);
+    EC_POINT_point2oct(recvGrp, recvPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
+                       &info->bytes[prefixLen], recvPubKeyLen, NULL);
   if (bytesWritten != recvPubKeyLen) {
     err = ECE_ERROR_ENCODE_RECEIVER_PUBLIC_KEY;
     goto error;
@@ -273,8 +273,8 @@ ece_aes128gcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
 
   // Copy the sender public key.
   bytesWritten = EC_POINT_point2oct(
-      senderGrp, senderPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
-      &info->bytes[prefixLen + recvPubKeyLen], senderPubKeyLen, NULL);
+    senderGrp, senderPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
+    &info->bytes[prefixLen + recvPubKeyLen], senderPubKeyLen, NULL);
   if (bytesWritten != senderPubKeyLen) {
     err = ECE_ERROR_ENCODE_SENDER_PUBLIC_KEY;
     goto error;
@@ -320,13 +320,13 @@ ece_aesgcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
 
   // First, we determine the lengths of the two keys.
   size_t recvPubKeyLen = EC_POINT_point2oct(
-      recvGrp, recvPubKeyPt, POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
+    recvGrp, recvPubKeyPt, POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
   if (!recvPubKeyLen || recvPubKeyLen > UINT16_MAX) {
     err = ECE_ERROR_ENCODE_RECEIVER_PUBLIC_KEY;
     goto error;
   }
   size_t senderPubKeyLen = EC_POINT_point2oct(
-      senderGrp, senderPubKeyPt, POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
+    senderGrp, senderPubKeyPt, POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
   if (!senderPubKeyLen || senderPubKeyLen > UINT16_MAX) {
     err = ECE_ERROR_ENCODE_SENDER_PUBLIC_KEY;
     goto error;
@@ -346,10 +346,9 @@ ece_aesgcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
 
   // Copy the length-prefixed receiver public key.
   ece_write_uint16_be(&info->bytes[prefixLen], (uint16_t) recvPubKeyLen);
-  size_t bytesWritten =
-      EC_POINT_point2oct(recvGrp, recvPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
-                         &info->bytes[prefixLen + ECE_AESGCM_KEY_LENGTH_SIZE],
-                         recvPubKeyLen, NULL);
+  size_t bytesWritten = EC_POINT_point2oct(
+    recvGrp, recvPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
+    &info->bytes[prefixLen + ECE_AESGCM_KEY_LENGTH_SIZE], recvPubKeyLen, NULL);
   if (bytesWritten != recvPubKeyLen) {
     err = ECE_ERROR_ENCODE_RECEIVER_PUBLIC_KEY;
     goto error;
@@ -357,12 +356,12 @@ ece_aesgcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
 
   // Copy the length-prefixed sender public key.
   ece_write_uint16_be(
-      &info->bytes[prefixLen + recvPubKeyLen + ECE_AESGCM_KEY_LENGTH_SIZE],
-      (uint16_t) senderPubKeyLen);
+    &info->bytes[prefixLen + recvPubKeyLen + ECE_AESGCM_KEY_LENGTH_SIZE],
+    (uint16_t) senderPubKeyLen);
   bytesWritten = EC_POINT_point2oct(
-      senderGrp, senderPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
-      &info->bytes[prefixLen + recvPubKeyLen + ECE_AESGCM_KEY_LENGTH_SIZE * 2],
-      senderPubKeyLen, NULL);
+    senderGrp, senderPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
+    &info->bytes[prefixLen + recvPubKeyLen + ECE_AESGCM_KEY_LENGTH_SIZE * 2],
+    senderPubKeyLen, NULL);
   if (bytesWritten != senderPubKeyLen) {
     err = ECE_ERROR_ENCODE_SENDER_PUBLIC_KEY;
     goto error;
@@ -431,8 +430,8 @@ ece_aesgcm_derive_key_and_nonce(const ece_buf_t* rawRecvPrivKey,
   // Next, derive the AES decryption key and nonce. We include the sender and
   // receiver public keys in the info strings.
   err = ece_aesgcm_generate_info(
-      recvPrivKey, senderPubKey, ECE_AESGCM_WEB_PUSH_KEY_INFO_PREFIX,
-      ECE_AESGCM_WEB_PUSH_KEY_INFO_PREFIX_LENGTH, &keyInfo);
+    recvPrivKey, senderPubKey, ECE_AESGCM_WEB_PUSH_KEY_INFO_PREFIX,
+    ECE_AESGCM_WEB_PUSH_KEY_INFO_PREFIX_LENGTH, &keyInfo);
   if (err) {
     goto end;
   }
@@ -441,8 +440,8 @@ ece_aesgcm_derive_key_and_nonce(const ece_buf_t* rawRecvPrivKey,
     goto end;
   }
   err = ece_aesgcm_generate_info(
-      recvPrivKey, senderPubKey, ECE_AESGCM_WEB_PUSH_NONCE_INFO_PREFIX,
-      ECE_AESGCM_WEB_PUSH_NONCE_INFO_PREFIX_LENGTH, &nonceInfo);
+    recvPrivKey, senderPubKey, ECE_AESGCM_WEB_PUSH_NONCE_INFO_PREFIX,
+    ECE_AESGCM_WEB_PUSH_NONCE_INFO_PREFIX_LENGTH, &nonceInfo);
   if (err) {
     goto end;
   }
@@ -497,8 +496,8 @@ ece_aes128gcm_derive_key_and_nonce(const ece_buf_t* rawRecvPrivKey,
   // The new "aes128gcm" scheme includes the sender and receiver public keys in
   // the info string when deriving the Web Push PRK.
   err = ece_aes128gcm_generate_info(
-      recvPrivKey, senderPubKey, ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX,
-      ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX_LENGTH, &prkInfo);
+    recvPrivKey, senderPubKey, ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX,
+    ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX_LENGTH, &prkInfo);
   if (err) {
     goto end;
   }
@@ -760,7 +759,7 @@ ece_aesgcm_decrypt(const ece_buf_t* rawRecvPrivKey, const ece_buf_t* authSecret,
 
   uint32_t rs;
   err = ece_header_extract_aesgcm_crypto_params(
-      cryptoKeyHeader, encryptionHeader, &rs, &salt, &rawSenderPubKey);
+    cryptoKeyHeader, encryptionHeader, &rs, &salt, &rawSenderPubKey);
   if (err) {
     goto end;
   }

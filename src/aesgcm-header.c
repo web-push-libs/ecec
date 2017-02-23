@@ -43,7 +43,7 @@ typedef struct ece_header_pairs_s {
 static ece_header_pairs_t*
 ece_header_pairs_alloc(ece_header_pairs_t* head) {
   ece_header_pairs_t* pairs =
-      (ece_header_pairs_t*) malloc(sizeof(ece_header_pairs_t));
+    (ece_header_pairs_t*) malloc(sizeof(ece_header_pairs_t));
   if (!pairs) {
     return NULL;
   }
@@ -101,7 +101,7 @@ typedef struct ece_header_params_s {
 static ece_header_params_t*
 ece_header_params_alloc(ece_header_params_t* head) {
   ece_header_params_t* params =
-      (ece_header_params_t*) malloc(sizeof(ece_header_params_t));
+    (ece_header_params_t*) malloc(sizeof(ece_header_params_t));
   if (!params) {
     return NULL;
   }

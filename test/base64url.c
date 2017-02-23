@@ -8,25 +8,25 @@ typedef struct ece_base64url_test_s {
 } ece_base64url_test_t;
 
 static ece_base64url_test_t base64url_tests[] = {
-    // Test vectors from RFC 4648, section 10.
-    {"", ""},
-    {"Zg", "f"},
-    {"Zg==", "f"},
-    {"Zm8", "fo"},
-    {"Zm8=", "fo"},
-    {"Zm9v", "foo"},
-    {"Zm9vYg", "foob"},
-    {"Zm9vYg==", "foob"},
-    {"Zm9vYmE", "fooba"},
-    {"Zm9vYmE=", "fooba"},
-    {"Zm9vYmFy", "foobar"},
+  // Test vectors from RFC 4648, section 10.
+  {"", ""},
+  {"Zg", "f"},
+  {"Zg==", "f"},
+  {"Zm8", "fo"},
+  {"Zm8=", "fo"},
+  {"Zm9v", "foo"},
+  {"Zm9vYg", "foob"},
+  {"Zm9vYg==", "foob"},
+  {"Zm9vYmE", "fooba"},
+  {"Zm9vYmE=", "fooba"},
+  {"Zm9vYmFy", "foobar"},
 
-    // Examples from RFC 4648, section 9.g
-    {"FPucA9l-", "\x14\xfb\x9c\x03\xd9\x7e"},
-    {"FPucA9k", "\x14\xfb\x9c\x03\xd9"},
-    {"FPucA9k=", "\x14\xfb\x9c\x03\xd9"},
-    {"FPucAw", "\x14\xfb\x9c\x03"},
-    {"FPucAw==", "\x14\xfb\x9c\x03"},
+  // Examples from RFC 4648, section 9.g
+  {"FPucA9l-", "\x14\xfb\x9c\x03\xd9\x7e"},
+  {"FPucA9k", "\x14\xfb\x9c\x03\xd9"},
+  {"FPucA9k=", "\x14\xfb\x9c\x03\xd9"},
+  {"FPucAw", "\x14\xfb\x9c\x03"},
+  {"FPucAw==", "\x14\xfb\x9c\x03"},
 };
 
 void
