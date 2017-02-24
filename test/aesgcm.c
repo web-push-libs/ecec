@@ -8,9 +8,9 @@ typedef struct valid_param_test_s {
   const char* desc;
   const char* cryptoKey;
   const char* encryption;
+  const char* salt;
+  const char* rawSenderPubKey;
   uint32_t rs;
-  uint8_t* salt;
-  uint8_t* rawSenderPubKey;
 } valid_param_test_t;
 
 typedef struct invalid_param_test_s {
@@ -35,28 +35,34 @@ static valid_param_test_t valid_param_tests[] = {
     .desc = "Multiple keys",
     .cryptoKey = "keyid=p256dh;dh=Iy1Je2Kv11A,p256ecdsa=o2M8QfiEKuI",
     .encryption = "keyid=p256dh;salt=upk1yFkp1xI",
+    .salt = "\xba\x99\x35\xc8\x59\x29\xd7\x12",
+    .rawSenderPubKey = "\x23\x2d\x49\x7b\x62\xaf\xd7\x50",
     .rs = 4096,
-    .salt = (uint8_t[]){0xba, 0x99, 0x35, 0xc8, 0x59, 0x29, 0xd7, 0x12},
-    .rawSenderPubKey =
-      (uint8_t[]){0x23, 0x2d, 0x49, 0x7b, 0x62, 0xaf, 0xd7, 0x50},
   },
   {
     .desc = "Quoted key param",
     .cryptoKey = "dh=\"byfHbUffc-k\"",
     .encryption = "salt=C11AvAsp6Gc",
+    .salt = "\x0b\x5d\x40\xbc\x0b\x29\xe8\x67",
+    .rawSenderPubKey = "\x6f\x27\xc7\x6d\x47\xdf\x73\xe9",
     .rs = 4096,
-    .salt = (uint8_t[]){0x0b, 0x5d, 0x40, 0xbc, 0x0b, 0x29, 0xe8, 0x67},
-    .rawSenderPubKey =
-      (uint8_t[]){0x6f, 0x27, 0xc7, 0x6d, 0x47, 0xdf, 0x73, 0xe9},
   },
   {
     .desc = "Quoted salt param and rs = 24",
     .cryptoKey = "dh=ybuT4VDz-Bg",
     .encryption = "salt=\"H7U7wcIoIKs\"; rs=24",
+    .salt = "\x1f\xb5\x3b\xc1\xc2\x28\x20\xab",
+    .rawSenderPubKey = "\xc9\xbb\x93\xe1\x50\xf3\xf8\x18",
     .rs = 24,
-    .salt = (uint8_t[]){0x1f, 0xb5, 0x3b, 0xc1, 0xc2, 0x28, 0x20, 0xab},
-    .rawSenderPubKey =
-      (uint8_t[]){0xc9, 0xbb, 0x93, 0xe1, 0x50, 0xf3, 0xf8, 0x18},
+  },
+  {
+    .desc = "Multiple keys, extra whitespace, strange key ID",
+    .cryptoKey = " dh= \"ujIToeKunCY\" ,keyid = hello ; dh = I7p5M0yyP8A ",
+    .encryption = "salt=ie_oYLhw7SI; keyid=\"hello\"; rs =6 , salt = "
+                  "6NAh50bfJZc ;keyid=ujIToeKunCY ",
+    .salt = "\x89\xef\xe8\x60\xb8\x70\xed\x22",
+    .rawSenderPubKey = "\x23\xba\x79\x33\x4c\xb2\x3f\xc0",
+    .rs = 6,
   },
 };
 
@@ -175,15 +181,19 @@ ece_aesgcm_test_valid_crypto_params() {
     ece_assert(err == ECE_OK, "%s: Error %d extracting params", t.desc, err);
     ece_assert(rs == t.rs, "%s: Want rs = %d; got %d", t.desc, t.rs, rs);
 
-    ece_buf_t expectedSalt;
-    expectedSalt.bytes = t.salt;
-    expectedSalt.length = 8;
-    ece_assert_bufs_equal(&salt, &expectedSalt, t.desc);
+    size_t saltLen = strlen(t.salt);
+    ece_assert(salt.length == saltLen, "Got salt length %d for `%s`; want %d",
+               salt.length, t.desc, saltLen);
+    ece_assert(!memcmp(salt.bytes, t.salt, saltLen), "Mismatched salt for %s",
+               t.desc);
 
-    ece_buf_t expectedRawSenderPubKey;
-    expectedRawSenderPubKey.bytes = t.rawSenderPubKey;
-    expectedRawSenderPubKey.length = 8;
-    ece_assert_bufs_equal(&rawSenderPubKey, &expectedRawSenderPubKey, t.desc);
+    size_t rawSenderPubKeyLen = strlen(t.rawSenderPubKey);
+    ece_assert(rawSenderPubKey.length == rawSenderPubKeyLen,
+               "Got public key length %d for `%s`; want %d",
+               rawSenderPubKey.length, t.desc, rawSenderPubKeyLen);
+    ece_assert(
+      !memcmp(rawSenderPubKey.bytes, t.rawSenderPubKey, rawSenderPubKeyLen),
+      "Mismatched public key for %s", t.desc);
 
     ece_buf_free(&salt);
     ece_buf_free(&rawSenderPubKey);

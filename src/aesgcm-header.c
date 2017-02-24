@@ -110,8 +110,8 @@ ece_header_params_alloc(ece_header_params_t* head) {
   return params;
 }
 
-// Reverses a parameter list in-place.
-static void
+// Reverses a parameter list in-place and returns a pointer to the new head.
+static ece_header_params_t*
 ece_header_params_reverse(ece_header_params_t* params) {
   ece_header_params_t* sibling = NULL;
   while (params) {
@@ -120,6 +120,7 @@ ece_header_params_reverse(ece_header_params_t* params) {
     sibling = params;
     params = next;
   }
+  return sibling;
 }
 
 // Frees a parameter list and all its nodes.
@@ -282,13 +283,12 @@ ece_header_parse(ece_header_parser_t* parser, const char* input) {
 // parameter list.
 static ece_header_params_t*
 ece_header_extract_params(const char* header) {
-  ece_header_params_t* params = ece_header_params_alloc(NULL);
-  if (!params) {
-    goto error;
-  }
   ece_header_parser_t parser;
   parser.state = ECE_HEADER_STATE_BEGIN_NAME;
-  parser.params = params;
+  parser.params = ece_header_params_alloc(NULL);
+  if (!parser.params) {
+    goto error;
+  }
   const char* input = header;
   while (*input) {
     if (ece_header_parse(&parser, input)) {
@@ -308,11 +308,10 @@ ece_header_extract_params(const char* header) {
       goto error;
     }
   }
-  ece_header_params_reverse(params);
-  return params;
+  return ece_header_params_reverse(parser.params);
 
 error:
-  ece_header_params_free(params);
+  ece_header_params_free(parser.params);
   return NULL;
 }
 
@@ -398,9 +397,12 @@ ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
         err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER;
         goto error;
       }
-      bool keyIdMatches = true;
+      bool keyIdMatches = false;
       for (ece_header_pairs_t* pair = cryptoKeyParam->pairs; pair;
            pair = pair->next) {
+        if (!ece_header_pairs_has_name(pair, "keyid")) {
+          continue;
+        }
         keyIdMatches = ece_header_pairs_has_value(pair, keyId);
         if (keyIdMatches) {
           break;
