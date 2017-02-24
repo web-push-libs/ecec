@@ -11,14 +11,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define ECE_HEADER_STATE_BEGIN_NAME 1
-#define ECE_HEADER_STATE_NAME 2
-#define ECE_HEADER_STATE_END_NAME 3
-#define ECE_HEADER_STATE_BEGIN_VALUE 4
-#define ECE_HEADER_STATE_VALUE 5
-#define ECE_HEADER_STATE_QUOTED_VALUE 6
-#define ECE_HEADER_STATE_END_VALUE 7
-#define ECE_HEADER_STATE_INVALID_HEADER 8
+#define ECE_HEADER_STATE_BEGIN_PARAM 1
+#define ECE_HEADER_STATE_BEGIN_NAME 2
+#define ECE_HEADER_STATE_NAME 3
+#define ECE_HEADER_STATE_END_NAME 4
+#define ECE_HEADER_STATE_BEGIN_VALUE 5
+#define ECE_HEADER_STATE_VALUE 6
+#define ECE_HEADER_STATE_QUOTED_VALUE 7
+#define ECE_HEADER_STATE_END_VALUE 8
+#define ECE_HEADER_STATE_INVALID_HEADER 9
 
 // A linked list that holds name-value pairs for a parameter in a header
 // value. For example, if the parameter is `a=b; c=d; e=f`, the parser will
@@ -167,6 +168,16 @@ typedef struct ece_header_parser_s {
 static bool
 ece_header_parse(ece_header_parser_t* parser, const char* input) {
   switch (parser->state) {
+  case ECE_HEADER_STATE_BEGIN_PARAM: {
+    ece_header_params_t* param = ece_header_params_alloc(parser->params);
+    if (!param) {
+      break;
+    }
+    parser->params = param;
+    parser->state = ECE_HEADER_STATE_BEGIN_NAME;
+    return false;
+  }
+
   case ECE_HEADER_STATE_BEGIN_NAME:
     if (ece_header_is_space(*input)) {
       return true;
@@ -195,6 +206,9 @@ ece_header_parse(ece_header_parser_t* parser, const char* input) {
     break;
 
   case ECE_HEADER_STATE_END_NAME:
+    if (!parser->params->pairs->nameLen) {
+      break;
+    }
     if (ece_header_is_space(*input)) {
       return true;
     }
@@ -248,6 +262,9 @@ ece_header_parse(ece_header_parser_t* parser, const char* input) {
     break;
 
   case ECE_HEADER_STATE_END_VALUE:
+    if (!parser->params->pairs->valueLen) {
+      break;
+    }
     if (ece_header_is_space(*input)) {
       return true;
     }
@@ -259,14 +276,9 @@ ece_header_parse(ece_header_parser_t* parser, const char* input) {
       return true;
     }
     if (*input == ',') {
-      // New parameter. Prepend a new node to the parameters list and
-      // begin parsing its pairs.
-      ece_header_params_t* param = ece_header_params_alloc(parser->params);
-      if (!param) {
-        break;
-      }
-      parser->params = param;
-      parser->state = ECE_HEADER_STATE_BEGIN_NAME;
+      // New parameter. Advance the parser; `ECE_HEADER_STATE_BEGIN_PARAM` will
+      // prepend a new node to the parameters list and begin parsing its pairs.
+      parser->state = ECE_HEADER_STATE_BEGIN_PARAM;
       return true;
     }
     break;
@@ -284,11 +296,9 @@ ece_header_parse(ece_header_parser_t* parser, const char* input) {
 static ece_header_params_t*
 ece_header_extract_params(const char* header) {
   ece_header_parser_t parser;
-  parser.state = ECE_HEADER_STATE_BEGIN_NAME;
-  parser.params = ece_header_params_alloc(NULL);
-  if (!parser.params) {
-    goto error;
-  }
+  parser.state = ECE_HEADER_STATE_BEGIN_PARAM;
+  parser.params = NULL;
+
   const char* input = header;
   while (*input) {
     if (ece_header_parse(&parser, input)) {
@@ -335,7 +345,7 @@ ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
   // First, extract the key ID, salt, and record size from the first key in the
   // `Encryption` header.
   encryptionParams = ece_header_extract_params(encryptionHeader);
-  if (!encryptionParams || !encryptionParams->pairs) {
+  if (!encryptionParams) {
     err = ECE_ERROR_INVALID_ENCRYPTION_HEADER;
     goto error;
   }
@@ -393,10 +403,6 @@ ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
     // matching parameter in the `Crypto-Key` header. Otherwise, we assume
     // there's only one key, and use the first one we see.
     while (cryptoKeyParam) {
-      if (!cryptoKeyParam->pairs) {
-        err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER;
-        goto error;
-      }
       bool keyIdMatches = false;
       for (ece_header_pairs_t* pair = cryptoKeyParam->pairs; pair;
            pair = pair->next) {

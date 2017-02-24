@@ -58,5 +58,10 @@ ece_aes128gcm_test_valid_payloads() {
                plaintext.length, expectedLen);
     ece_assert(!memcmp(t->plaintext, plaintext.bytes, plaintext.length),
                "%s: Mismatched plaintext", t->desc);
+
+    ece_buf_free(&rawRecvPrivKey);
+    ece_buf_free(&authSecret);
+    ece_buf_free(&payload);
+    ece_buf_free(&plaintext);
   }
 }
