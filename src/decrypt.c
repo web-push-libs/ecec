@@ -594,7 +594,7 @@ ece_decrypt_record(const ece_buf_t* key, const ece_buf_t* nonce, size_t counter,
   block->length = blockLen + finalLen;
 
 end:
-  EVP_CIPHER_CTX_cleanup(ctx);
+  EVP_CIPHER_CTX_free(ctx);
   return err;
 }
 
