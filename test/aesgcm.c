@@ -42,7 +42,8 @@ static valid_param_test_t valid_param_tests[] = {
   {
     .desc = "Multiple keys in both headers",
     .cryptoKey = "keyid=a;dh=bX0VbuZy8HQ,dh=Iy1Je2Kv11A;keyid=p256dh",
-    .encryption = "salt=upk1yFkp1xI;rs=48;keyid=p256dh,salt=U0DM1JsdIbU;keyid=a",
+    .encryption =
+      "salt=upk1yFkp1xI;rs=48;keyid=p256dh,salt=U0DM1JsdIbU;keyid=a",
     .salt = "\xba\x99\x35\xc8\x59\x29\xd7\x12",
     .rawSenderPubKey = "\x23\x2d\x49\x7b\x62\xaf\xd7\x50",
     .rs = 48,

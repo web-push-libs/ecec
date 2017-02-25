@@ -122,17 +122,11 @@ ece_import_receiver_private_key(const ece_buf_t* rawKey) {
     goto error;
   }
   const EC_GROUP* group = EC_KEY_get0_group(key);
-  if (!group) {
-    goto error;
-  }
   pubKeyPt = EC_POINT_new(group);
   if (!pubKeyPt) {
     goto error;
   }
   const BIGNUM* privKey = EC_KEY_get0_private_key(key);
-  if (!privKey) {
-    goto error;
-  }
   if (EC_POINT_mul(group, pubKeyPt, privKey, NULL, NULL, NULL) <= 0) {
     goto error;
   }
@@ -173,15 +167,7 @@ ece_compute_secret(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
   int err = ECE_OK;
 
   const EC_GROUP* recvGrp = EC_KEY_get0_group(recvPrivKey);
-  if (!recvGrp) {
-    err = ECE_INVALID_RECEIVER_PRIVATE_KEY;
-    goto error;
-  }
   const EC_POINT* senderPubKeyPt = EC_KEY_get0_public_key(senderPubKey);
-  if (!senderPubKeyPt) {
-    err = ECE_INVALID_SENDER_PUBLIC_KEY;
-    goto error;
-  }
   int fieldSize = EC_GROUP_get_degree(recvGrp);
   if (fieldSize <= 0) {
     err = ECE_ERROR_COMPUTE_SECRET;
@@ -218,25 +204,9 @@ ece_aes128gcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
   // Then, we allocate a buffer large enough to hold the prefix and keys, and
   // write them to the buffer.
   const EC_GROUP* recvGrp = EC_KEY_get0_group(recvPrivKey);
-  if (!recvGrp) {
-    err = ECE_INVALID_RECEIVER_PRIVATE_KEY;
-    goto error;
-  }
   const EC_POINT* recvPubKeyPt = EC_KEY_get0_public_key(recvPrivKey);
-  if (!recvPubKeyPt) {
-    err = ECE_INVALID_RECEIVER_PRIVATE_KEY;
-    goto error;
-  }
   const EC_GROUP* senderGrp = EC_KEY_get0_group(senderPubKey);
-  if (!senderGrp) {
-    err = ECE_INVALID_SENDER_PUBLIC_KEY;
-    goto error;
-  }
   const EC_POINT* senderPubKeyPt = EC_KEY_get0_public_key(senderPubKey);
-  if (!senderPubKeyPt) {
-    err = ECE_INVALID_SENDER_PUBLIC_KEY;
-    goto error;
-  }
 
   // First, we determine the lengths of the two keys.
   size_t recvPubKeyLen = EC_POINT_point2oct(
@@ -263,19 +233,18 @@ ece_aes128gcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
   memcpy(info->bytes, prefix, prefixLen);
 
   // Copy the receiver public key.
-  size_t bytesWritten =
-    EC_POINT_point2oct(recvGrp, recvPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
-                       &info->bytes[prefixLen], recvPubKeyLen, NULL);
-  if (bytesWritten != recvPubKeyLen) {
+  if (EC_POINT_point2oct(recvGrp, recvPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
+                         &info->bytes[prefixLen], recvPubKeyLen,
+                         NULL) != recvPubKeyLen) {
     err = ECE_ERROR_ENCODE_RECEIVER_PUBLIC_KEY;
     goto error;
   }
 
   // Copy the sender public key.
-  bytesWritten = EC_POINT_point2oct(
-    senderGrp, senderPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
-    &info->bytes[prefixLen + recvPubKeyLen], senderPubKeyLen, NULL);
-  if (bytesWritten != senderPubKeyLen) {
+  if (EC_POINT_point2oct(senderGrp, senderPubKeyPt,
+                         POINT_CONVERSION_UNCOMPRESSED,
+                         &info->bytes[prefixLen + recvPubKeyLen],
+                         senderPubKeyLen, NULL) != senderPubKeyLen) {
     err = ECE_ERROR_ENCODE_SENDER_PUBLIC_KEY;
     goto error;
   }
@@ -298,25 +267,9 @@ ece_aesgcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
   int err = ECE_OK;
 
   const EC_GROUP* recvGrp = EC_KEY_get0_group(recvPrivKey);
-  if (!recvGrp) {
-    err = ECE_INVALID_RECEIVER_PRIVATE_KEY;
-    goto error;
-  }
   const EC_POINT* recvPubKeyPt = EC_KEY_get0_public_key(recvPrivKey);
-  if (!recvPubKeyPt) {
-    err = ECE_INVALID_RECEIVER_PRIVATE_KEY;
-    goto error;
-  }
   const EC_GROUP* senderGrp = EC_KEY_get0_group(senderPubKey);
-  if (!senderGrp) {
-    err = ECE_INVALID_SENDER_PUBLIC_KEY;
-    goto error;
-  }
   const EC_POINT* senderPubKeyPt = EC_KEY_get0_public_key(senderPubKey);
-  if (!senderPubKeyPt) {
-    err = ECE_INVALID_SENDER_PUBLIC_KEY;
-    goto error;
-  }
 
   // First, we determine the lengths of the two keys.
   size_t recvPubKeyLen = EC_POINT_point2oct(
@@ -346,10 +299,9 @@ ece_aesgcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
 
   // Copy the length-prefixed receiver public key.
   ece_write_uint16_be(&info->bytes[prefixLen], (uint16_t) recvPubKeyLen);
-  size_t bytesWritten = EC_POINT_point2oct(
-    recvGrp, recvPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
-    &info->bytes[prefixLen + ECE_AESGCM_KEY_LENGTH_SIZE], recvPubKeyLen, NULL);
-  if (bytesWritten != recvPubKeyLen) {
+  if (EC_POINT_point2oct(recvGrp, recvPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
+                         &info->bytes[prefixLen + ECE_AESGCM_KEY_LENGTH_SIZE],
+                         recvPubKeyLen, NULL) != recvPubKeyLen) {
     err = ECE_ERROR_ENCODE_RECEIVER_PUBLIC_KEY;
     goto error;
   }
@@ -358,11 +310,11 @@ ece_aesgcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
   ece_write_uint16_be(
     &info->bytes[prefixLen + recvPubKeyLen + ECE_AESGCM_KEY_LENGTH_SIZE],
     (uint16_t) senderPubKeyLen);
-  bytesWritten = EC_POINT_point2oct(
-    senderGrp, senderPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
-    &info->bytes[prefixLen + recvPubKeyLen + ECE_AESGCM_KEY_LENGTH_SIZE * 2],
-    senderPubKeyLen, NULL);
-  if (bytesWritten != senderPubKeyLen) {
+  if (EC_POINT_point2oct(
+        senderGrp, senderPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
+        &info
+           ->bytes[prefixLen + recvPubKeyLen + ECE_AESGCM_KEY_LENGTH_SIZE * 2],
+        senderPubKeyLen, NULL) != senderPubKeyLen) {
     err = ECE_ERROR_ENCODE_SENDER_PUBLIC_KEY;
     goto error;
   }
