@@ -17,9 +17,10 @@
 #define ECE_HEADER_STATE_END_NAME 4
 #define ECE_HEADER_STATE_BEGIN_VALUE 5
 #define ECE_HEADER_STATE_VALUE 6
-#define ECE_HEADER_STATE_QUOTED_VALUE 7
-#define ECE_HEADER_STATE_END_VALUE 8
-#define ECE_HEADER_STATE_INVALID_HEADER 9
+#define ECE_HEADER_STATE_BEGIN_QUOTED_VALUE 7
+#define ECE_HEADER_STATE_QUOTED_VALUE 8
+#define ECE_HEADER_STATE_END_VALUE 9
+#define ECE_HEADER_STATE_INVALID_HEADER 10
 
 // A linked list that holds name-value pairs for a parameter in a header
 // value. For example, if the parameter is `a=b; c=d; e=f`, the parser will
@@ -164,7 +165,7 @@ typedef struct ece_header_parser_s {
 } ece_header_parser_t;
 
 // Parses the next token in `input` and updates the parser state. Returns true
-// if the caller shoulld advance to the next character; false otherwise.
+// if the caller should advance to the next character; false otherwise.
 static bool
 ece_header_parse(ece_header_parser_t* parser, const char* input) {
   switch (parser->state) {
@@ -206,9 +207,6 @@ ece_header_parse(ece_header_parser_t* parser, const char* input) {
     break;
 
   case ECE_HEADER_STATE_END_NAME:
-    if (!parser->params->pairs->nameLen) {
-      break;
-    }
     if (ece_header_is_space(*input)) {
       return true;
     }
@@ -228,10 +226,7 @@ ece_header_parse(ece_header_parser_t* parser, const char* input) {
       return false;
     }
     if (*input == '"') {
-      // We advance to the next character before storing the starting
-      // position, because the surrounding quotes aren't part of the value.
-      parser->params->pairs->value = input + 1;
-      parser->state = ECE_HEADER_STATE_QUOTED_VALUE;
+      parser->state = ECE_HEADER_STATE_BEGIN_QUOTED_VALUE;
       return true;
     }
     break;
@@ -247,24 +242,30 @@ ece_header_parse(ece_header_parser_t* parser, const char* input) {
     }
     break;
 
-  case ECE_HEADER_STATE_QUOTED_VALUE:
-    if (*input == '"') {
-      parser->state = ECE_HEADER_STATE_END_VALUE;
-      return true;
-    }
+  case ECE_HEADER_STATE_BEGIN_QUOTED_VALUE:
     if (ece_header_is_valid_pair_value(*input)) {
       // Quoted strings allow spaces and escapes, but neither `Crypto-Key` nor
       // `Encryption` accept them. We keep the parser simple by rejecting
-      // non-Base64url characters here.
+      // non-Base64url characters here. We also disallow empty quoted strings.
+      parser->params->pairs->value = input;
       parser->params->pairs->valueLen++;
+      parser->state = ECE_HEADER_STATE_QUOTED_VALUE;
+      return true;
+    }
+    break;
+
+  case ECE_HEADER_STATE_QUOTED_VALUE:
+    if (ece_header_is_valid_pair_value(*input)) {
+      parser->params->pairs->valueLen++;
+      return true;
+    }
+    if (*input == '"') {
+      parser->state = ECE_HEADER_STATE_END_VALUE;
       return true;
     }
     break;
 
   case ECE_HEADER_STATE_END_VALUE:
-    if (!parser->params->pairs->valueLen) {
-      break;
-    }
     if (ece_header_is_space(*input)) {
       return true;
     }
