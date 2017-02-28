@@ -8,31 +8,27 @@
 #define ece_assert(cond, format, ...)                                          \
   do {                                                                         \
     if (!(cond)) {                                                             \
-      ece_report(__func__, __LINE__, #cond, format, __VA_ARGS__);              \
+      ece_log(__func__, __LINE__, #cond, format, __VA_ARGS__);                 \
       abort();                                                                 \
     }                                                                          \
   } while (0)
 
-// Compares two buffers for length and byte equality.
+// Logs an assertion failure to standard error.
 void
-ece_assert_bufs_equal(ece_buf_t* a, ece_buf_t* b, const char* desc);
-
-// Writes an assertion failure to standard error.
-void
-ece_report(const char* funcName, int line, const char* expr, const char* format,
-           ...);
+ece_log(const char* funcName, int line, const char* expr, const char* format,
+        ...);
 
 void
-ece_aesgcm_test_valid_crypto_params();
+test_aesgcm_valid_crypto_params();
 
 void
-ece_aesgcm_test_invalid_crypto_params();
+test_aesgcm_invalid_crypto_params();
 
 void
-ece_aesgcm_test_valid_ciphertexts();
+test_aesgcm_valid_ciphertexts();
 
 void
-ece_aes128gcm_test_valid_payloads();
+test_aes128gcm_valid_payloads();
 
 void
-ece_base64url_test_decode();
+test_base64url_decode();

@@ -2,15 +2,15 @@
 
 #include <string.h>
 
-typedef struct ece_aes128gcm_valid_payload_test_s {
+typedef struct valid_payload_test_s {
   const char* desc;
   const char* plaintext;
   const char* recvPrivKey;
   const char* authSecret;
   const char* payload;
-} ece_aes128gcm_valid_payload_test_t;
+} valid_payload_test_t;
 
-static ece_aes128gcm_valid_payload_test_t valid_payload_tests[] = {
+static valid_payload_test_t valid_payload_tests[] = {
   {
     .desc = "rs = 24",
     .plaintext = "I am the walrus",
@@ -25,39 +25,38 @@ static ece_aes128gcm_valid_payload_test_t valid_payload_tests[] = {
 };
 
 void
-ece_aes128gcm_test_valid_payloads() {
-  size_t tests =
-    sizeof(valid_payload_tests) / sizeof(ece_aes128gcm_valid_payload_test_t);
+test_aes128gcm_valid_payloads() {
+  size_t tests = sizeof(valid_payload_tests) / sizeof(valid_payload_test_t);
   for (size_t i = 0; i < tests; i++) {
-    ece_aes128gcm_valid_payload_test_t* t = &valid_payload_tests[i];
+    valid_payload_test_t t = valid_payload_tests[i];
 
     ece_buf_t rawRecvPrivKey;
     int err =
-      ece_base64url_decode(t->recvPrivKey, strlen(t->recvPrivKey),
+      ece_base64url_decode(t.recvPrivKey, strlen(t.recvPrivKey),
                            ECE_BASE64URL_REJECT_PADDING, &rawRecvPrivKey);
-    ece_assert(!err, "%s: Failed to decode private key: %d", t->desc, err);
+    ece_assert(!err, "Got %d decoding private key for `%s`", err, t.desc);
 
     ece_buf_t authSecret;
-    err = ece_base64url_decode(t->authSecret, strlen(t->authSecret),
+    err = ece_base64url_decode(t.authSecret, strlen(t.authSecret),
                                ECE_BASE64URL_REJECT_PADDING, &authSecret);
-    ece_assert(!err, "%s: Failed to decode auth secret: %d", t->desc, err);
+    ece_assert(!err, "Got %d decoding auth secret for `%s`", err, t.desc);
 
     ece_buf_t payload;
-    err = ece_base64url_decode(t->payload, strlen(t->payload),
+    err = ece_base64url_decode(t.payload, strlen(t.payload),
                                ECE_BASE64URL_REJECT_PADDING, &payload);
-    ece_assert(!err, "%s: Failed to decode payload: %d", t->desc, err);
+    ece_assert(!err, "Got %d decoding payload for `%s`", err, t.desc);
 
     ece_buf_t plaintext;
     err =
       ece_aes128gcm_decrypt(&rawRecvPrivKey, &authSecret, &payload, &plaintext);
-    ece_assert(!err, "%s: Failed to decrypt payload: %d", t->desc, err);
+    ece_assert(!err, "Got %d decrypting payload for `%s`", err, t.desc);
 
-    size_t expectedLen = strlen(t->plaintext);
+    size_t expectedLen = strlen(t.plaintext);
     ece_assert(plaintext.length == expectedLen,
-               "%s: Got plaintext length %d; want %d", t->desc,
-               plaintext.length, expectedLen);
-    ece_assert(!memcmp(t->plaintext, plaintext.bytes, plaintext.length),
-               "%s: Mismatched plaintext", t->desc);
+               "Got plaintext length %zu for `%s`; want %zu", plaintext.length,
+               t.desc, expectedLen);
+    ece_assert(!memcmp(t.plaintext, plaintext.bytes, plaintext.length),
+               "Wrong plaintext for `%s`", t.desc);
 
     ece_buf_free(&rawRecvPrivKey);
     ece_buf_free(&authSecret);

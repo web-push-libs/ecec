@@ -6,31 +6,20 @@
 
 int
 main() {
-  ece_aesgcm_test_valid_crypto_params();
-  ece_aesgcm_test_invalid_crypto_params();
-  ece_aesgcm_test_valid_ciphertexts();
+  test_aesgcm_valid_crypto_params();
+  test_aesgcm_invalid_crypto_params();
+  test_aesgcm_valid_ciphertexts();
 
-  ece_aes128gcm_test_valid_payloads();
+  test_aes128gcm_valid_payloads();
 
-  ece_base64url_test_decode();
+  test_base64url_decode();
 
   return 0;
 }
 
 void
-ece_assert_bufs_equal(ece_buf_t* a, ece_buf_t* b, const char* desc) {
-  ece_assert(a->length == b->length, "%s: Got buffer length %d; want %d", desc,
-             a->length, b->length);
-  for (size_t i = 0; i < a->length; i++) {
-    ece_assert(a->bytes[i] == b->bytes[i],
-               "%s: Got byte %" PRIu8 " at %z; want %" PRIu8, desc, a->bytes[i],
-               i, b->bytes[i]);
-  }
-}
-
-void
-ece_report(const char* funcName, int line, const char* expr, const char* format,
-           ...) {
+ece_log(const char* funcName, int line, const char* expr, const char* format,
+        ...) {
   char* message = NULL;
   va_list args;
   va_start(args, format);
