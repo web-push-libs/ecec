@@ -38,7 +38,7 @@ ece_log(const char* funcName, int line, const char* expr, const char* format,
   if (!message || vsprintf(message, format, args) != size) {
     goto error;
   }
-  message[size + 1] = '\0';
+  message[size] = '\0';
   fprintf(stderr, "[%s:%d] (%s): %s\n", funcName, line, expr, message);
   goto end;
 
