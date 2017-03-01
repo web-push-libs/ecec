@@ -10,19 +10,22 @@ include(GNUInstallDirs)
 
 find_package(OpenSSL 1.1.0 REQUIRED)
 
-include_directories(include)
 enable_testing()
 
 set(ECE_SOURCES
   src/aesgcm-header.c
   src/base64url.c
   src/buffer.c
-  src/decrypt.c)
+  src/decrypt.c
+  src/keys.c)
 add_library(ece ${ECE_SOURCES})
 set_target_properties(ece PROPERTIES
   OUTPUT_NAME ece
   VERSION "${ECE_VERSION}")
-target_include_directories(ece PUBLIC ${OPENSSL_INCLUDE_DIR})
+target_include_directories(ece
+  PUBLIC include
+  PRIVATE src
+  PRIVATE ${OPENSSL_INCLUDE_DIR})
 target_link_libraries(ece PRIVATE ${OPENSSL_LIBRARIES})
 if(DEFINED ENV{COVERAGE})
   target_compile_options(ece PUBLIC "-fprofile-arcs;-ftest-coverage")
@@ -33,8 +36,8 @@ set(ECE_DECRYPT_SOURCES
   tools/ece-decrypt/ece-decrypt.c)
 add_executable(ece-decrypt ${ECE_DECRYPT_SOURCES})
 set_target_properties(ece-decrypt PROPERTIES EXCLUDE_FROM_ALL 1)
-target_include_directories(ece-decrypt PUBLIC tools/ece-decrypt)
-target_link_libraries(ece-decrypt ece)
+target_include_directories(ece-decrypt PRIVATE tools/ece-decrypt)
+target_link_libraries(ece-decrypt PRIVATE ece)
 
 set(ECE_TEST_SOURCES
   test/aes128gcm.c
@@ -43,8 +46,8 @@ set(ECE_TEST_SOURCES
   test/test.c)
 add_executable(ece-test ${ECE_TEST_SOURCES})
 set_target_properties(ece-test PROPERTIES EXCLUDE_FROM_ALL 1)
-target_include_directories(ece-test PUBLIC test)
-target_link_libraries(ece-test PUBLIC ece)
+target_include_directories(ece-test PRIVATE test)
+target_link_libraries(ece-test PRIVATE ece)
 add_test(NAME ece-test COMMAND ece-test)
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} "--output-on-failure")
 add_dependencies(check ece-test)
