@@ -1,5 +1,8 @@
 #ifndef ECE_KEYS_H
 #define ECE_KEYS_H
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <openssl/ec.h>
 
@@ -33,4 +36,7 @@ ece_aesgcm_derive_key_and_nonce(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
                                 const ece_buf_t* salt, ece_buf_t* key,
                                 ece_buf_t* nonce);
 
+#ifdef __cplusplus
+}
+#endif
 #endif /* ECE_KEYS_H */
