@@ -4,6 +4,8 @@
 extern "C" {
 #endif
 
+#include "ece.h"
+
 #include <openssl/ec.h>
 
 // Generates a 96-bit IV for decryption, 48 bits of which are populated.
