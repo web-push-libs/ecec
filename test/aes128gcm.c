@@ -22,6 +22,17 @@ static valid_payload_test_t valid_payload_tests[] = {
                "LTLIraUBhwPFSxC0geECfXIJ2Ma0NVP6Ezr6WX8t3EWluoFAlE5kkLuNbZm"
                "6HQLmDZX0jOZER3wXIx2VuXpPld0",
   },
+  {
+    .desc = "Example from draft-ietf-webpush-encryption-latest",
+    .plaintext = "When I grow up, I want to be a watermelon",
+    .recvPrivKey = "q1dXpw3UpT5VOmu_cf_v6ih07Aems3njxI-JWgLcM94",
+    .authSecret = "BTBZMqHH6r4Tts7J_aSIgg",
+    .payload = "DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z9KsN6nGRTbVYI_"
+               "c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru"
+               "3jl7A_"
+               "yl95bQpu6cVPTpK4Mqgkf1CXztLVBSt2Ks3oZwbuwXPXLWyouBWLVWGNWQexSgS"
+               "xsj_Qulcy4a-fN",
+  },
 };
 
 void
