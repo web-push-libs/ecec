@@ -5,8 +5,7 @@
 
 #include <openssl/evp.h>
 
-typedef int (*derive_key_and_nonce_t)(const ece_buf_t* rawRecvPrivKey,
-                                      const ece_buf_t* rawSenderPubKey,
+typedef int (*derive_key_and_nonce_t)(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
                                       const ece_buf_t* authSecret,
                                       const ece_buf_t* salt, ece_buf_t* key,
                                       ece_buf_t* nonce);
@@ -88,13 +87,27 @@ ece_decrypt(const ece_buf_t* rawRecvPrivKey, const ece_buf_t* rawSenderPubKey,
 
   ece_buf_reset(plaintext);
 
+  EC_KEY* recvPrivKey = NULL;
+  EC_KEY* senderPubKey = NULL;
+
   ece_buf_t key;
   ece_buf_reset(&key);
   ece_buf_t nonce;
   ece_buf_reset(&nonce);
 
-  err = deriveKeyAndNonce(rawRecvPrivKey, rawSenderPubKey, authSecret, salt,
-                          &key, &nonce);
+  recvPrivKey = ece_import_private_key(rawRecvPrivKey);
+  if (!recvPrivKey) {
+    err = ECE_INVALID_RECEIVER_PRIVATE_KEY;
+    goto end;
+  }
+  senderPubKey = ece_import_public_key(rawSenderPubKey);
+  if (!senderPubKey) {
+    err = ECE_INVALID_SENDER_PUBLIC_KEY;
+    goto end;
+  }
+
+  err = deriveKeyAndNonce(recvPrivKey, senderPubKey, authSecret, salt, &key,
+                          &nonce);
   if (err) {
     goto error;
   }
@@ -139,6 +152,8 @@ error:
   ece_buf_free(plaintext);
 
 end:
+  EC_KEY_free(recvPrivKey);
+  EC_KEY_free(senderPubKey);
   ece_buf_free(&key);
   ece_buf_free(&nonce);
   return err;

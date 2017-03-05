@@ -3,7 +3,6 @@
 
 #include <string.h>
 
-#include <openssl/ec.h>
 #include <openssl/evp.h>
 #include <openssl/kdf.h>
 
@@ -43,6 +42,54 @@ ece_generate_iv(uint8_t* nonce, uint64_t counter, uint8_t* iv) {
   // of the draft.
   uint64_t mask = ece_read_uint48_be(&nonce[offset]);
   ece_write_uint48_be(&iv[offset], mask ^ counter);
+}
+
+EC_KEY*
+ece_import_private_key(const ece_buf_t* rawKey) {
+  EC_KEY* key = NULL;
+  EC_POINT* pubKeyPt = NULL;
+
+  key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+  if (!key) {
+    goto error;
+  }
+  if (EC_KEY_oct2priv(key, rawKey->bytes, rawKey->length) <= 0) {
+    goto error;
+  }
+  const EC_GROUP* group = EC_KEY_get0_group(key);
+  pubKeyPt = EC_POINT_new(group);
+  if (!pubKeyPt) {
+    goto error;
+  }
+  const BIGNUM* privKey = EC_KEY_get0_private_key(key);
+  if (EC_POINT_mul(group, pubKeyPt, privKey, NULL, NULL, NULL) <= 0) {
+    goto error;
+  }
+  if (EC_KEY_set_public_key(key, pubKeyPt) <= 0) {
+    goto error;
+  }
+  goto end;
+
+error:
+  EC_KEY_free(key);
+  key = NULL;
+
+end:
+  EC_POINT_free(pubKeyPt);
+  return key;
+}
+
+EC_KEY*
+ece_import_public_key(const ece_buf_t* rawKey) {
+  EC_KEY* key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+  if (!key) {
+    return NULL;
+  }
+  if (!EC_KEY_oct2key(key, rawKey->bytes, rawKey->length, NULL)) {
+    EC_KEY_free(key);
+    return NULL;
+  }
+  return key;
 }
 
 // HKDF from RFC 5869: `HKDF-Expand(HKDF-Extract(salt, ikm), info, length)`.
@@ -97,58 +144,6 @@ ece_hkdf_sha256(const ece_buf_t* salt, const ece_buf_t* ikm,
 end:
   EVP_PKEY_CTX_free(ctx);
   return err;
-}
-
-// Inflates a raw ECDH private key into an OpenSSL `EC_KEY` containing the
-// receiver's private and public keys. Returns `NULL` on error.
-static EC_KEY*
-ece_import_receiver_private_key(const ece_buf_t* rawKey) {
-  EC_KEY* key = NULL;
-  EC_POINT* pubKeyPt = NULL;
-
-  key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
-  if (!key) {
-    goto error;
-  }
-  if (EC_KEY_oct2priv(key, rawKey->bytes, rawKey->length) <= 0) {
-    goto error;
-  }
-  const EC_GROUP* group = EC_KEY_get0_group(key);
-  pubKeyPt = EC_POINT_new(group);
-  if (!pubKeyPt) {
-    goto error;
-  }
-  const BIGNUM* privKey = EC_KEY_get0_private_key(key);
-  if (EC_POINT_mul(group, pubKeyPt, privKey, NULL, NULL, NULL) <= 0) {
-    goto error;
-  }
-  if (EC_KEY_set_public_key(key, pubKeyPt) <= 0) {
-    goto error;
-  }
-  goto end;
-
-error:
-  EC_KEY_free(key);
-  key = NULL;
-
-end:
-  EC_POINT_free(pubKeyPt);
-  return key;
-}
-
-// Inflates a raw ECDH public key into an `EC_KEY` containing the sender's
-// public key. Returns `NULL` on error.
-static EC_KEY*
-ece_import_sender_public_key(const ece_buf_t* rawKey) {
-  EC_KEY* key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
-  if (!key) {
-    return NULL;
-  }
-  if (!EC_KEY_oct2key(key, rawKey->bytes, rawKey->length, NULL)) {
-    EC_KEY_free(key);
-    return NULL;
-  }
-  return key;
 }
 
 // Computes the ECDH shared secret, used as the input key material (IKM) for
@@ -250,15 +245,11 @@ end:
 }
 
 int
-ece_aes128gcm_derive_key_and_nonce(const ece_buf_t* rawRecvPrivKey,
-                                   const ece_buf_t* rawSenderPubKey,
+ece_aes128gcm_derive_key_and_nonce(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
                                    const ece_buf_t* authSecret,
                                    const ece_buf_t* salt, ece_buf_t* key,
                                    ece_buf_t* nonce) {
   int err = ECE_OK;
-
-  EC_KEY* recvPrivKey = NULL;
-  EC_KEY* senderPubKey = NULL;
 
   ece_buf_t sharedSecret;
   ece_buf_reset(&sharedSecret);
@@ -267,17 +258,6 @@ ece_aes128gcm_derive_key_and_nonce(const ece_buf_t* rawRecvPrivKey,
   ece_buf_t prk;
   ece_buf_reset(&prk);
 
-  // Import the raw receiver private key and sender public key.
-  recvPrivKey = ece_import_receiver_private_key(rawRecvPrivKey);
-  if (!recvPrivKey) {
-    err = ECE_INVALID_RECEIVER_PRIVATE_KEY;
-    goto end;
-  }
-  senderPubKey = ece_import_sender_public_key(rawSenderPubKey);
-  if (!senderPubKey) {
-    err = ECE_INVALID_SENDER_PUBLIC_KEY;
-    goto end;
-  }
   err = ece_compute_secret(recvPrivKey, senderPubKey, &sharedSecret);
   if (err) {
     goto end;
@@ -317,8 +297,6 @@ ece_aes128gcm_derive_key_and_nonce(const ece_buf_t* rawRecvPrivKey,
   err = ece_hkdf_sha256(salt, &prk, &nonceInfo, ECE_NONCE_LENGTH, nonce);
 
 end:
-  EC_KEY_free(recvPrivKey);
-  EC_KEY_free(senderPubKey);
   ece_buf_free(&sharedSecret);
   ece_buf_free(&prkInfo);
   ece_buf_free(&prk);
@@ -398,15 +376,11 @@ end:
 // Derives the "aesgcm" decryption key and nonce given the receiver private key,
 // sender public key, authentication secret, and sender salt.
 int
-ece_aesgcm_derive_key_and_nonce(const ece_buf_t* rawRecvPrivKey,
-                                const ece_buf_t* rawSenderPubKey,
+ece_aesgcm_derive_key_and_nonce(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
                                 const ece_buf_t* authSecret,
                                 const ece_buf_t* salt, ece_buf_t* key,
                                 ece_buf_t* nonce) {
   int err = ECE_OK;
-
-  EC_KEY* recvPrivKey = NULL;
-  EC_KEY* senderPubKey = NULL;
 
   ece_buf_t sharedSecret;
   ece_buf_reset(&sharedSecret);
@@ -417,17 +391,6 @@ ece_aesgcm_derive_key_and_nonce(const ece_buf_t* rawRecvPrivKey,
   ece_buf_t nonceInfo;
   ece_buf_reset(&nonceInfo);
 
-  // Import the raw receiver private key and sender public key.
-  recvPrivKey = ece_import_receiver_private_key(rawRecvPrivKey);
-  if (!recvPrivKey) {
-    err = ECE_INVALID_RECEIVER_PRIVATE_KEY;
-    goto end;
-  }
-  senderPubKey = ece_import_sender_public_key(rawSenderPubKey);
-  if (!senderPubKey) {
-    err = ECE_INVALID_SENDER_PUBLIC_KEY;
-    goto end;
-  }
   err = ece_compute_secret(recvPrivKey, senderPubKey, &sharedSecret);
   if (err) {
     goto end;
@@ -468,8 +431,6 @@ ece_aesgcm_derive_key_and_nonce(const ece_buf_t* rawRecvPrivKey,
   err = ece_hkdf_sha256(salt, &prk, &nonceInfo, ECE_NONCE_LENGTH, nonce);
 
 end:
-  EC_KEY_free(recvPrivKey);
-  EC_KEY_free(senderPubKey);
   ece_buf_free(&sharedSecret);
   ece_buf_free(&prk);
   ece_buf_free(&keyInfo);
