@@ -120,9 +120,13 @@ ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
                                         uint32_t* rs, ece_buf_t* salt,
                                         ece_buf_t* rawSenderPubKey);
 
-// Initializes a buffer with the requested length.
+// Initializes a non-zero-filled buffer with the requested length.
 bool
-ece_buf_alloc(ece_buf_t* buf, size_t length);
+ece_buf_alloc(ece_buf_t* buf, size_t len);
+
+// Initializes a zero-filled buffer with the requested length.
+bool
+ece_buf_calloc(ece_buf_t* buf, size_t len);
 
 // Resets a buffer's byte array and length to zero. This does not automatically
 // free the backing array if one was set before.
