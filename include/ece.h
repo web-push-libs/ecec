@@ -14,6 +14,8 @@ extern "C" {
 #define ECE_SHA_256_LENGTH 32
 
 #define ECE_AES128GCM_HEADER_SIZE 21
+#define ECE_AES128GCM_MAX_KEY_ID_LENGTH 255
+#define ECE_AES128GCM_RECORD_OVERHEAD 17
 #define ECE_AESGCM_PAD_SIZE 2
 #define ECE_AESGCM_KEY_LENGTH_SIZE 2
 
@@ -54,6 +56,8 @@ extern "C" {
 #define ECE_ERROR_INVALID_SALT -18
 #define ECE_ERROR_INVALID_DH -19
 #define ECE_ERROR_INVALID_BASE64URL -20
+#define ECE_ERROR_ENCRYPT -21
+#define ECE_ERROR_ENCRYPT_PADDING -22
 
 // Annotates a variable or parameter as unused to avoid compiler warnings.
 #define ECE_UNUSED(x) (void) (x)
@@ -98,6 +102,31 @@ ece_aes128gcm_decrypt(
   // decryption, and freed if an error occurs. If decryption succeeds, the
   // caller takes ownership of the buffer, and should free it when it's done.
   ece_buf_t* plaintext);
+
+// Returns the maximum encrypted payload size. The caller should allocate and
+// pass a buffer of this size to `ece_aes128gcm_encrypt*`.
+size_t
+ece_aes128gcm_max_payload_length(uint32_t rs, size_t padLen,
+                                 const ece_buf_t* plaintext);
+
+// Encrypts `plaintext` with an ephemeral ECDH key pair and a random salt.
+// Returns an error if encryption fails, or if `payload` is not large enough
+// to hold the encrypted payload.
+int
+ece_aes128gcm_encrypt(const ece_buf_t* rawRecvPubKey,
+                      const ece_buf_t* authSecret, uint32_t rs, size_t padLen,
+                      const ece_buf_t* plaintext, ece_buf_t* payload);
+
+// Encrypts `plaintext` with the given sender private key, receiver public key,
+// salt, record size, and pad length. `ece_aes128gcm_encrypt` is sufficient for
+// most uses.
+int
+ece_aes128gcm_encrypt_with_keys(const ece_buf_t* rawSenderPrivKey,
+                                const ece_buf_t* rawRecvPubKey,
+                                const ece_buf_t* authSecret,
+                                const ece_buf_t* salt, uint32_t rs,
+                                size_t padLen, const ece_buf_t* plaintext,
+                                ece_buf_t* payload);
 
 // Decrypts a payload encrypted with the "aesgcm" scheme.
 int

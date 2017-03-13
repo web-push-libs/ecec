@@ -16,6 +16,7 @@ set(ECE_SOURCES
   src/aesgcm-header.c
   src/base64url.c
   src/buffer.c
+  src/encrypt.c
   src/decrypt.c
   src/keys.c)
 add_library(ece ${ECE_SOURCES})

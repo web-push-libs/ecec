@@ -28,7 +28,10 @@ void
 test_aesgcm_valid_ciphertexts();
 
 void
-test_aes128gcm_valid_payloads();
+test_aes128gcm_encrypt();
+
+void
+test_aes128gcm_decrypt_valid_payloads();
 
 void
 test_base64url_decode();
