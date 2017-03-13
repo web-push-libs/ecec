@@ -1,5 +1,6 @@
 #include "keys.h"
 
+#include <assert.h>
 #include <string.h>
 
 #include <openssl/evp.h>
@@ -244,7 +245,8 @@ end:
 }
 
 int
-ece_aes128gcm_derive_key_and_nonce(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
+ece_aes128gcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* recvPrivKey,
+                                   EC_KEY* senderPubKey,
                                    const ece_buf_t* authSecret,
                                    const ece_buf_t* salt, ece_buf_t* key,
                                    ece_buf_t* nonce) {
@@ -264,9 +266,23 @@ ece_aes128gcm_derive_key_and_nonce(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
 
   // The new "aes128gcm" scheme includes the sender and receiver public keys in
   // the info string when deriving the Web Push PRK.
-  err = ece_aes128gcm_generate_info(
-    recvPrivKey, senderPubKey, ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX,
-    ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX_LENGTH, &prkInfo);
+  switch (mode) {
+  case ECE_MODE_ENCRYPT:
+    err = ece_aes128gcm_generate_info(
+      senderPubKey, recvPrivKey, ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX,
+      ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX_LENGTH, &prkInfo);
+    break;
+
+  case ECE_MODE_DECRYPT:
+    err = ece_aes128gcm_generate_info(
+      recvPrivKey, senderPubKey, ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX,
+      ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX_LENGTH, &prkInfo);
+    break;
+
+  default:
+    assert(false);
+    err = ECE_ERROR_DECRYPT;
+  }
   if (err) {
     goto end;
   }
@@ -375,7 +391,8 @@ end:
 // Derives the "aesgcm" decryption key and nonce given the receiver private key,
 // sender public key, authentication secret, and sender salt.
 int
-ece_aesgcm_derive_key_and_nonce(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
+ece_aesgcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* recvPrivKey,
+                                EC_KEY* senderPubKey,
                                 const ece_buf_t* authSecret,
                                 const ece_buf_t* salt, ece_buf_t* key,
                                 ece_buf_t* nonce) {

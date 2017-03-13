@@ -78,6 +78,12 @@ typedef enum ece_base64url_decode_policy_e {
   ECE_BASE64URL_REJECT_PADDING,
 } ece_base64url_decode_policy_t;
 
+// Key derivation modes.
+typedef enum ece_mode_e {
+  ECE_MODE_ENCRYPT,
+  ECE_MODE_DECRYPT,
+} ece_mode_t;
+
 // Decrypts a payload encrypted with the "aes128gcm" scheme.
 int
 ece_aes128gcm_decrypt(

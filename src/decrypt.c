@@ -4,7 +4,8 @@
 
 #include <openssl/evp.h>
 
-typedef int (*derive_key_and_nonce_t)(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
+typedef int (*derive_key_and_nonce_t)(ece_mode_t mode, EC_KEY* recvPrivKey,
+                                      EC_KEY* senderPubKey,
                                       const ece_buf_t* authSecret,
                                       const ece_buf_t* salt, ece_buf_t* key,
                                       ece_buf_t* nonce);
@@ -105,8 +106,8 @@ ece_decrypt(const ece_buf_t* rawRecvPrivKey, const ece_buf_t* rawSenderPubKey,
     goto end;
   }
 
-  err = deriveKeyAndNonce(recvPrivKey, senderPubKey, authSecret, salt, &key,
-                          &nonce);
+  err = deriveKeyAndNonce(ECE_MODE_DECRYPT, recvPrivKey, senderPubKey,
+                          authSecret, salt, &key, &nonce);
   if (err) {
     goto error;
   }
