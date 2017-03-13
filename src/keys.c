@@ -149,13 +149,12 @@ end:
 // Computes the ECDH shared secret, used as the input key material (IKM) for
 // HKDF.
 static int
-ece_compute_secret(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
-                   ece_buf_t* sharedSecret) {
+ece_compute_secret(EC_KEY* privKey, EC_KEY* pubKey, ece_buf_t* sharedSecret) {
   int err = ECE_OK;
 
-  const EC_GROUP* recvGrp = EC_KEY_get0_group(recvPrivKey);
-  const EC_POINT* senderPubKeyPt = EC_KEY_get0_public_key(senderPubKey);
-  int fieldSize = EC_GROUP_get_degree(recvGrp);
+  const EC_GROUP* group = EC_KEY_get0_group(privKey);
+  const EC_POINT* pubKeyPt = EC_KEY_get0_public_key(pubKey);
+  int fieldSize = EC_GROUP_get_degree(group);
   if (fieldSize <= 0) {
     err = ECE_ERROR_COMPUTE_SECRET;
     goto error;
@@ -164,8 +163,8 @@ ece_compute_secret(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
     err = ECE_ERROR_OUT_OF_MEMORY;
     goto error;
   }
-  if (ECDH_compute_key(sharedSecret->bytes, sharedSecret->length,
-                       senderPubKeyPt, recvPrivKey, NULL) <= 0) {
+  if (ECDH_compute_key(sharedSecret->bytes, sharedSecret->length, pubKeyPt,
+                       privKey, NULL) <= 0) {
     err = ECE_ERROR_COMPUTE_SECRET;
     goto error;
   }
@@ -181,7 +180,7 @@ end:
 // The "aes128gcm" info string is "WebPush: info\0", followed by the receiver
 // and sender public keys.
 static int
-ece_aes128gcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
+ece_aes128gcm_generate_info(EC_KEY* recvKey, EC_KEY* senderKey,
                             const char* prefix, size_t prefixLen,
                             ece_buf_t* info) {
   int err = ECE_OK;
@@ -190,27 +189,27 @@ ece_aes128gcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
   // and sender public keys. First, we determine the lengths of the two keys.
   // Then, we allocate a buffer large enough to hold the prefix and keys, and
   // write them to the buffer.
-  const EC_GROUP* recvGrp = EC_KEY_get0_group(recvPrivKey);
-  const EC_POINT* recvPubKeyPt = EC_KEY_get0_public_key(recvPrivKey);
-  const EC_GROUP* senderGrp = EC_KEY_get0_group(senderPubKey);
-  const EC_POINT* senderPubKeyPt = EC_KEY_get0_public_key(senderPubKey);
+  const EC_GROUP* recvGrp = EC_KEY_get0_group(recvKey);
+  const EC_POINT* recvKeyPt = EC_KEY_get0_public_key(recvKey);
+  const EC_GROUP* senderGrp = EC_KEY_get0_group(senderKey);
+  const EC_POINT* senderKeyPt = EC_KEY_get0_public_key(senderKey);
 
   // First, we determine the lengths of the two keys.
-  size_t recvPubKeyLen = EC_POINT_point2oct(
-    recvGrp, recvPubKeyPt, POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
-  if (!recvPubKeyLen) {
+  size_t recvKeyLen = EC_POINT_point2oct(
+    recvGrp, recvKeyPt, POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
+  if (!recvKeyLen) {
     err = ECE_ERROR_ENCODE_RECEIVER_PUBLIC_KEY;
     goto error;
   }
-  size_t senderPubKeyLen = EC_POINT_point2oct(
-    senderGrp, senderPubKeyPt, POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
-  if (!senderPubKeyLen) {
+  size_t senderKeyLen = EC_POINT_point2oct(
+    senderGrp, senderKeyPt, POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
+  if (!senderKeyLen) {
     err = ECE_ERROR_ENCODE_SENDER_PUBLIC_KEY;
     goto error;
   }
 
   // Next, we allocate a buffer large enough to hold the prefix and keys.
-  size_t infoLen = prefixLen + recvPubKeyLen + senderPubKeyLen;
+  size_t infoLen = prefixLen + recvKeyLen + senderKeyLen;
   if (!ece_buf_alloc(info, infoLen)) {
     err = ECE_ERROR_OUT_OF_MEMORY;
     goto error;
@@ -220,18 +219,17 @@ ece_aes128gcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
   memcpy(info->bytes, prefix, prefixLen);
 
   // Copy the receiver public key.
-  if (EC_POINT_point2oct(recvGrp, recvPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
-                         &info->bytes[prefixLen], recvPubKeyLen,
-                         NULL) != recvPubKeyLen) {
+  if (EC_POINT_point2oct(recvGrp, recvKeyPt, POINT_CONVERSION_UNCOMPRESSED,
+                         &info->bytes[prefixLen], recvKeyLen,
+                         NULL) != recvKeyLen) {
     err = ECE_ERROR_ENCODE_RECEIVER_PUBLIC_KEY;
     goto error;
   }
 
   // Copy the sender public key.
-  if (EC_POINT_point2oct(senderGrp, senderPubKeyPt,
-                         POINT_CONVERSION_UNCOMPRESSED,
-                         &info->bytes[prefixLen + recvPubKeyLen],
-                         senderPubKeyLen, NULL) != senderPubKeyLen) {
+  if (EC_POINT_point2oct(senderGrp, senderKeyPt, POINT_CONVERSION_UNCOMPRESSED,
+                         &info->bytes[prefixLen + recvKeyLen], senderKeyLen,
+                         NULL) != senderKeyLen) {
     err = ECE_ERROR_ENCODE_SENDER_PUBLIC_KEY;
     goto error;
   }
@@ -245,9 +243,8 @@ end:
 }
 
 int
-ece_aes128gcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* recvPrivKey,
-                                   EC_KEY* senderPubKey,
-                                   const ece_buf_t* authSecret,
+ece_aes128gcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* localKey,
+                                   EC_KEY* remoteKey, const ece_buf_t* authSecret,
                                    const ece_buf_t* salt, ece_buf_t* key,
                                    ece_buf_t* nonce) {
   int err = ECE_OK;
@@ -259,7 +256,7 @@ ece_aes128gcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* recvPrivKey,
   ece_buf_t prk;
   ece_buf_reset(&prk);
 
-  err = ece_compute_secret(recvPrivKey, senderPubKey, &sharedSecret);
+  err = ece_compute_secret(localKey, remoteKey, &sharedSecret);
   if (err) {
     goto end;
   }
@@ -268,14 +265,18 @@ ece_aes128gcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* recvPrivKey,
   // the info string when deriving the Web Push PRK.
   switch (mode) {
   case ECE_MODE_ENCRYPT:
+    // For encryption, the remote static public key is the receiver key, and the
+    // local ephemeral private key is the sender key.
     err = ece_aes128gcm_generate_info(
-      senderPubKey, recvPrivKey, ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX,
+      remoteKey, localKey, ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX,
       ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX_LENGTH, &prkInfo);
     break;
 
   case ECE_MODE_DECRYPT:
+    // For decryption, the local static private key is the receiver key, and the
+    // remote ephemeral public key is the sender key.
     err = ece_aes128gcm_generate_info(
-      recvPrivKey, senderPubKey, ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX,
+      localKey, remoteKey, ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX,
       ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX_LENGTH, &prkInfo);
     break;
 

@@ -4,8 +4,8 @@
 
 #include <openssl/evp.h>
 
-typedef int (*derive_key_and_nonce_t)(ece_mode_t mode, EC_KEY* recvPrivKey,
-                                      EC_KEY* senderPubKey,
+typedef int (*derive_key_and_nonce_t)(ece_mode_t mode, EC_KEY* localKey,
+                                      EC_KEY* remoteKey,
                                       const ece_buf_t* authSecret,
                                       const ece_buf_t* salt, ece_buf_t* key,
                                       ece_buf_t* nonce);
