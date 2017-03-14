@@ -242,8 +242,31 @@ end:
   return err;
 }
 
+// Derives the "aes128gcm" content encryption key and nonce.
 int
-ece_aes128gcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* localKey,
+ece_aes128gcm_derive_key_and_nonce(const ece_buf_t* salt, const ece_buf_t* ikm, ece_buf_t* key, ece_buf_t* nonce) {
+  // These buffers are stack-allocated, so they shouldn't be freed.
+  uint8_t keyInfoBytes[ECE_AES128GCM_KEY_INFO_LENGTH];
+  memcpy(keyInfoBytes, ECE_AES128GCM_KEY_INFO, ECE_AES128GCM_KEY_INFO_LENGTH);
+  ece_buf_t keyInfo;
+  keyInfo.bytes = keyInfoBytes;
+  keyInfo.length = ECE_AES128GCM_KEY_INFO_LENGTH;
+  int err = ece_hkdf_sha256(salt, &ikm, &keyInfo, ECE_KEY_LENGTH, key);
+  if (err) {
+    return err;
+  }
+
+  uint8_t nonceInfoBytes[ECE_AES128GCM_NONCE_INFO_LENGTH];
+  memcpy(nonceInfoBytes, ECE_AES128GCM_NONCE_INFO,
+         ECE_AES128GCM_NONCE_INFO_LENGTH);
+  ece_buf_t nonceInfo;
+  nonceInfo.bytes = nonceInfoBytes;
+  nonceInfo.length = ECE_AES128GCM_NONCE_INFO_LENGTH;
+  return ece_hkdf_sha256(salt, &ikm, &nonceInfo, ECE_NONCE_LENGTH, nonce);
+}
+
+int
+ece_aes128gcm_webpush_derive_key_and_nonce(ece_mode_t mode, EC_KEY* localKey,
                                    EC_KEY* remoteKey, const ece_buf_t* authSecret,
                                    const ece_buf_t* salt, ece_buf_t* key,
                                    ece_buf_t* nonce) {
@@ -251,10 +274,10 @@ ece_aes128gcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* localKey,
 
   ece_buf_t sharedSecret;
   ece_buf_reset(&sharedSecret);
-  ece_buf_t prkInfo;
-  ece_buf_reset(&prkInfo);
-  ece_buf_t prk;
-  ece_buf_reset(&prk);
+  ece_buf_t ikmInfo;
+  ece_buf_reset(&ikmInfo);
+  ece_buf_t ikm;
+  ece_buf_reset(&ikm);
 
   err = ece_compute_secret(localKey, remoteKey, &sharedSecret);
   if (err) {
@@ -269,7 +292,7 @@ ece_aes128gcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* localKey,
     // local ephemeral private key is the sender key.
     err = ece_aes128gcm_generate_info(
       remoteKey, localKey, ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX,
-      ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX_LENGTH, &prkInfo);
+      ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX_LENGTH, &ikmInfo);
     break;
 
   case ECE_MODE_DECRYPT:
@@ -277,7 +300,7 @@ ece_aes128gcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* localKey,
     // remote ephemeral public key is the sender key.
     err = ece_aes128gcm_generate_info(
       localKey, remoteKey, ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX,
-      ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX_LENGTH, &prkInfo);
+      ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX_LENGTH, &ikmInfo);
     break;
 
   default:
@@ -287,30 +310,13 @@ ece_aes128gcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* localKey,
   if (err) {
     goto end;
   }
-  err = ece_hkdf_sha256(authSecret, &sharedSecret, &prkInfo, ECE_SHA_256_LENGTH,
-                        &prk);
+  err = ece_hkdf_sha256(authSecret, &sharedSecret, &ikmInfo, ECE_SHA_256_LENGTH,
+                        &ikm);
   if (err) {
     goto end;
   }
 
-  // Next, derive the AES decryption key and nonce. We use static info strings.
-  // These buffers are stack-allocated, so they shouldn't be freed.
-  uint8_t keyInfoBytes[ECE_AES128GCM_KEY_INFO_LENGTH];
-  memcpy(keyInfoBytes, ECE_AES128GCM_KEY_INFO, ECE_AES128GCM_KEY_INFO_LENGTH);
-  ece_buf_t keyInfo;
-  keyInfo.bytes = keyInfoBytes;
-  keyInfo.length = ECE_AES128GCM_KEY_INFO_LENGTH;
-  err = ece_hkdf_sha256(salt, &prk, &keyInfo, ECE_KEY_LENGTH, key);
-  if (err) {
-    goto end;
-  }
-  uint8_t nonceInfoBytes[ECE_AES128GCM_NONCE_INFO_LENGTH];
-  memcpy(nonceInfoBytes, ECE_AES128GCM_NONCE_INFO,
-         ECE_AES128GCM_NONCE_INFO_LENGTH);
-  ece_buf_t nonceInfo;
-  nonceInfo.bytes = nonceInfoBytes;
-  nonceInfo.length = ECE_AES128GCM_NONCE_INFO_LENGTH;
-  err = ece_hkdf_sha256(salt, &prk, &nonceInfo, ECE_NONCE_LENGTH, nonce);
+  err = ece_aes128gcm_derive_key_and_nonce(salt, &ikm, key, nonce);
 
 end:
   ece_buf_free(&sharedSecret);
