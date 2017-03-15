@@ -19,47 +19,35 @@ ece_write_uint32_be(uint8_t* bytes, uint32_t value) {
 
 // Encrypts a plaintext block with optional padding.
 static int
-ece_aes128gcm_encrypt_block(EVP_CIPHER_CTX* ctx, const ece_buf_t* key,
-                            const ece_buf_t* nonce, size_t counter,
-                            const ece_buf_t* block, const ece_buf_t* pad,
-                            ece_buf_t* record) {
-
+ece_aes128gcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* key,
+                            const uint8_t* iv, const uint8_t* block,
+                            size_t blockLen, const uint8_t* pad, size_t padLen,
+                            uint8_t* record) {
   int err = ECE_OK;
 
-  // Generate the IV for this record using the nonce.
-  uint8_t iv[ECE_NONCE_LENGTH];
-  ece_generate_iv(nonce->bytes, counter, iv);
-
   // Encrypt the plaintext and padding.
-  if (EVP_EncryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key->bytes, iv) <= 0) {
+  if (EVP_EncryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key, iv) <= 0) {
     err = ECE_ERROR_ENCRYPT;
     goto end;
   }
-  int blockLen = -1;
-  if (EVP_EncryptUpdate(ctx, record->bytes, &blockLen, block->bytes,
-                        block->length) <= 0 ||
-      blockLen != block->length) {
+  int chunkLen = -1;
+  if (EVP_EncryptUpdate(ctx, record, &chunkLen, block, (int) blockLen) <= 0) {
     err = ECE_ERROR_ENCRYPT;
     goto end;
   }
-  int padLen = -1;
-  if (EVP_EncryptUpdate(ctx, &record->bytes[blockLen], &padLen, pad->bytes,
-                        pad->length) <= 0 ||
-      padLen != pad->length) {
+  if (EVP_EncryptUpdate(ctx, &record[blockLen], &chunkLen, pad, (int) padLen) <=
+      0) {
     err = ECE_ERROR_ENCRYPT;
     goto end;
   }
-  int finalLen = -1;
-  if (EVP_EncryptFinal_ex(ctx, &record->bytes[blockLen + padLen], &finalLen) <=
-        0 ||
-      finalLen) {
+  if (EVP_EncryptFinal_ex(ctx, NULL, &chunkLen) <= 0) {
     err = ECE_ERROR_ENCRYPT;
     goto end;
   }
 
   // Append the authentication tag.
   if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, ECE_TAG_LENGTH,
-                          &record->bytes[block->length + pad->length]) <= 0) {
+                          &record[blockLen + padLen]) <= 0) {
     err = ECE_ERROR_ENCRYPT;
     goto end;
   }
@@ -81,10 +69,6 @@ ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
 
   ece_buf_t pad;
   ece_buf_reset(&pad);
-  ece_buf_t key;
-  ece_buf_reset(&key);
-  ece_buf_t nonce;
-  ece_buf_reset(&nonce);
 
   if (salt->length != ECE_KEY_LENGTH) {
     err = ECE_ERROR_INVALID_SALT;
@@ -126,9 +110,11 @@ ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
     goto end;
   }
 
+  uint8_t key[ECE_KEY_LENGTH];
+  uint8_t nonce[ECE_NONCE_LENGTH];
   err = ece_webpush_aes128gcm_derive_key_and_nonce(
-    ECE_MODE_ENCRYPT, senderPrivKey, recvPubKey, authSecret, salt, &key,
-    &nonce);
+    ECE_MODE_ENCRYPT, senderPrivKey, recvPubKey, authSecret->bytes,
+    authSecret->length, salt->bytes, key, nonce);
   if (err) {
     goto end;
   }
@@ -187,8 +173,13 @@ ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
     }
     ece_buf_slice(&ciphertext, recordStart, recordEnd, &record);
 
-    err = ece_aes128gcm_encrypt_block(ctx, &key, &nonce, counter, &block,
-                                      &blockPad, &record);
+    // Generate the IV for this record using the nonce.
+    uint8_t iv[ECE_NONCE_LENGTH];
+    ece_generate_iv(nonce, counter, iv);
+
+    err = ece_aes128gcm_encrypt_block(ctx, key, iv, block.bytes, block.length,
+                                      blockPad.bytes, blockPad.length,
+                                      record.bytes);
     if (err) {
       goto end;
     }
@@ -204,8 +195,6 @@ ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
 end:
   EVP_CIPHER_CTX_free(ctx);
   ece_buf_free(&pad);
-  ece_buf_free(&key);
-  ece_buf_free(&nonce);
   return err;
 }
 
@@ -235,7 +224,8 @@ ece_aes128gcm_encrypt(const ece_buf_t* rawRecvPubKey,
   ece_buf_reset(&salt);
 
   // Import the receiver public key.
-  recvPubKey = ece_import_public_key(rawRecvPubKey);
+  recvPubKey =
+    ece_import_public_key(rawRecvPubKey->bytes, rawRecvPubKey->length);
   if (!recvPubKey) {
     err = ECE_ERROR_ENCRYPT;
     goto end;
@@ -285,12 +275,14 @@ ece_aes128gcm_encrypt_with_keys(const ece_buf_t* rawSenderPrivKey,
   EC_KEY* senderPrivKey = NULL;
   EC_KEY* recvPubKey = NULL;
 
-  senderPrivKey = ece_import_private_key(rawSenderPrivKey);
+  senderPrivKey =
+    ece_import_private_key(rawSenderPrivKey->bytes, rawSenderPrivKey->length);
   if (!senderPrivKey) {
     err = ECE_ERROR_ENCRYPT;
     goto end;
   }
-  recvPubKey = ece_import_public_key(rawRecvPubKey);
+  recvPubKey =
+    ece_import_public_key(rawRecvPubKey->bytes, rawRecvPubKey->length);
   if (!recvPubKey) {
     err = ECE_ERROR_ENCRYPT;
     goto end;

@@ -13,24 +13,29 @@ extern "C" {
 #define ECE_NONCE_LENGTH 12
 #define ECE_SHA_256_LENGTH 32
 
+#define ECE_SALT_LENGTH 16
+#define ECE_PUBLIC_KEY_LENGTH 65
+
 #define ECE_AES128GCM_HEADER_SIZE 21
 #define ECE_AES128GCM_MAX_KEY_ID_LENGTH 255
 #define ECE_AES128GCM_RECORD_OVERHEAD 17
 #define ECE_AESGCM_PAD_SIZE 2
-#define ECE_AESGCM_KEY_LENGTH_SIZE 2
 
 // HKDF info strings for the "aesgcm" scheme.
-#define ECE_AESGCM_WEB_PUSH_PRK_INFO "Content-Encoding: auth\0"
-#define ECE_AESGCM_WEB_PUSH_PRK_INFO_LENGTH 23
+#define ECE_AESGCM_WEB_PUSH_IKM_INFO "Content-Encoding: auth\0"
+#define ECE_AESGCM_WEB_PUSH_IKM_INFO_LENGTH 23
 #define ECE_AESGCM_WEB_PUSH_KEY_INFO_PREFIX "Content-Encoding: aesgcm\0P-256\0"
 #define ECE_AESGCM_WEB_PUSH_KEY_INFO_PREFIX_LENGTH 31
+#define ECE_AESGCM_WEB_PUSH_KEY_INFO_LENGTH 165
 #define ECE_AESGCM_WEB_PUSH_NONCE_INFO_PREFIX "Content-Encoding: nonce\0P-256\0"
 #define ECE_AESGCM_WEB_PUSH_NONCE_INFO_PREFIX_LENGTH 30
+#define ECE_AESGCM_WEB_PUSH_NONCE_INFO_LENGTH 164
 
 // HKDF info strings for the shared secret, encryption key, and nonce for the
 // "aes128gcm" scheme. Note that the length includes the NUL terminator.
-#define ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX "WebPush: info\0"
-#define ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX_LENGTH 14
+#define ECE_AES128GCM_WEB_PUSH_IKM_INFO_PREFIX "WebPush: info\0"
+#define ECE_AES128GCM_WEB_PUSH_IKM_INFO_PREFIX_LENGTH 14
+#define ECE_AES128GCM_WEB_PUSH_IKM_INFO_LENGTH 144
 #define ECE_AES128GCM_KEY_INFO "Content-Encoding: aes128gcm\0"
 #define ECE_AES128GCM_KEY_INFO_LENGTH 28
 #define ECE_AES128GCM_NONCE_INFO "Content-Encoding: nonce\0"

@@ -6,9 +6,9 @@
 
 typedef int (*derive_key_and_nonce_t)(ece_mode_t mode, EC_KEY* localKey,
                                       EC_KEY* remoteKey,
-                                      const ece_buf_t* authSecret,
-                                      const ece_buf_t* salt, ece_buf_t* key,
-                                      ece_buf_t* nonce);
+                                      const uint8_t* authSecret,
+                                      size_t authSecretLen, const uint8_t* salt,
+                                      uint8_t* key, uint8_t* nonce);
 
 typedef int (*unpad_t)(ece_buf_t* block, bool isLastRecord);
 
@@ -20,24 +20,11 @@ ece_read_uint16_be(uint8_t* bytes) {
 
 // Converts an encrypted record to a decrypted block.
 static int
-ece_decrypt_record(const ece_buf_t* key, const ece_buf_t* nonce, size_t counter,
+ece_decrypt_record(EVP_CIPHER_CTX* ctx, const uint8_t* key, const uint8_t* iv,
                    const ece_buf_t* record, ece_buf_t* block) {
   int err = ECE_OK;
 
-  EVP_CIPHER_CTX* ctx = NULL;
-  if (record->length > INT_MAX) {
-    err = ECE_ERROR_DECRYPT;
-    goto end;
-  }
-  ctx = EVP_CIPHER_CTX_new();
-  if (!ctx) {
-    err = ECE_ERROR_OUT_OF_MEMORY;
-    goto end;
-  }
-  // Generate the IV for this record using the nonce.
-  uint8_t iv[ECE_NONCE_LENGTH];
-  ece_generate_iv(nonce->bytes, counter, iv);
-  if (EVP_DecryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key->bytes, iv) <= 0) {
+  if (EVP_DecryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key, iv) <= 0) {
     err = ECE_ERROR_DECRYPT;
     goto end;
   }
@@ -50,31 +37,35 @@ ece_decrypt_record(const ece_buf_t* key, const ece_buf_t* nonce, size_t counter,
   }
   int blockLen = 0;
   if (EVP_DecryptUpdate(ctx, block->bytes, &blockLen, record->bytes,
-                        (int) record->length - ECE_TAG_LENGTH) <= 0 ||
-      blockLen < 0) {
+                        (int) record->length - ECE_TAG_LENGTH) <= 0) {
     err = ECE_ERROR_DECRYPT;
     goto end;
   }
   int finalLen = 0;
-  if (EVP_DecryptFinal_ex(ctx, &block->bytes[blockLen], &finalLen) <= 0 ||
-      finalLen < 0) {
+  if (EVP_DecryptFinal_ex(ctx, NULL, &finalLen) <= 0) {
     err = ECE_ERROR_DECRYPT;
     goto end;
   }
   block->length = blockLen + finalLen;
 
 end:
-  EVP_CIPHER_CTX_free(ctx);
+  EVP_CIPHER_CTX_reset(ctx);
   return err;
 }
 
 static int
-ece_decrypt_records(const ece_buf_t* key, const ece_buf_t* nonce, uint32_t rs,
+ece_decrypt_records(const uint8_t* key, const uint8_t* nonce, uint32_t rs,
                     const ece_buf_t* ciphertext, unpad_t unpad,
                     ece_buf_t* plaintext) {
   int err = ECE_OK;
 
   ece_buf_reset(plaintext);
+
+  EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+  if (!ctx) {
+    err = ECE_ERROR_OUT_OF_MEMORY;
+    goto error;
+  }
 
   // For simplicity, we allocate a buffer equal to the encrypted record size,
   // even though the decrypted block will be smaller. `ece_decrypt_record`
@@ -83,6 +74,7 @@ ece_decrypt_records(const ece_buf_t* key, const ece_buf_t* nonce, uint32_t rs,
     err = ECE_ERROR_OUT_OF_MEMORY;
     goto error;
   }
+
   size_t start = 0;
   size_t offset = 0;
   for (size_t counter = 0; start < ciphertext->length; counter++) {
@@ -96,9 +88,15 @@ ece_decrypt_records(const ece_buf_t* key, const ece_buf_t* nonce, uint32_t rs,
     }
     ece_buf_t record;
     ece_buf_slice(ciphertext, start, end, &record);
+
     ece_buf_t block;
     ece_buf_slice(plaintext, offset, end - start, &block);
-    err = ece_decrypt_record(key, nonce, counter, &record, &block);
+
+    // Generate the IV for this record using the nonce.
+    uint8_t iv[ECE_NONCE_LENGTH];
+    ece_generate_iv(nonce, counter, iv);
+
+    err = ece_decrypt_record(ctx, key, iv, &record, &block);
     if (err) {
       goto error;
     }
@@ -116,6 +114,7 @@ error:
   ece_buf_free(plaintext);
 
 end:
+  EVP_CIPHER_CTX_free(ctx);
   return err;
 }
 
@@ -134,35 +133,33 @@ ece_webpush_decrypt(const ece_buf_t* rawRecvPrivKey,
   EC_KEY* recvPrivKey = NULL;
   EC_KEY* senderPubKey = NULL;
 
-  ece_buf_t key;
-  ece_buf_reset(&key);
-  ece_buf_t nonce;
-  ece_buf_reset(&nonce);
-
-  recvPrivKey = ece_import_private_key(rawRecvPrivKey);
+  recvPrivKey =
+    ece_import_private_key(rawRecvPrivKey->bytes, rawRecvPrivKey->length);
   if (!recvPrivKey) {
     err = ECE_INVALID_RECEIVER_PRIVATE_KEY;
     goto end;
   }
-  senderPubKey = ece_import_public_key(rawSenderPubKey);
+  senderPubKey =
+    ece_import_public_key(rawSenderPubKey->bytes, rawSenderPubKey->length);
   if (!senderPubKey) {
     err = ECE_INVALID_SENDER_PUBLIC_KEY;
     goto end;
   }
 
+  uint8_t key[ECE_KEY_LENGTH];
+  uint8_t nonce[ECE_NONCE_LENGTH];
   err = deriveKeyAndNonce(ECE_MODE_DECRYPT, recvPrivKey, senderPubKey,
-                          authSecret, salt, &key, &nonce);
+                          authSecret->bytes, authSecret->length, salt->bytes,
+                          key, nonce);
   if (err) {
     goto end;
   }
 
-  err = ece_decrypt_records(&key, &nonce, rs, ciphertext, unpad, plaintext);
+  err = ece_decrypt_records(key, nonce, rs, ciphertext, unpad, plaintext);
 
 end:
   EC_KEY_free(recvPrivKey);
   EC_KEY_free(senderPubKey);
-  ece_buf_free(&key);
-  ece_buf_free(&nonce);
   return err;
 }
 
@@ -217,15 +214,24 @@ ece_aes128gcm_unpad(ece_buf_t* block, bool isLastRecord) {
   return ECE_ERROR_ZERO_PLAINTEXT;
 }
 
+size_t
+ece_aes128gcm_max_plaintext_length(const ece_buf_t* payload) {
+  ece_buf_t salt;
+  uint32_t rs;
+  ece_buf_t keyId;
+  ece_buf_t ciphertext;
+  int err =
+    ece_aes128gcm_extract_params(payload, &salt, &rs, &keyId, &ciphertext);
+  if (err) {
+    return 0;
+  }
+  return ciphertext.length - ECE_TAG_LENGTH * rs;
+}
+
 int
 ece_aes128gcm_decrypt(const ece_buf_t* ikm, const ece_buf_t* payload,
                       ece_buf_t* plaintext) {
   int err = ECE_OK;
-
-  ece_buf_t key;
-  ece_buf_reset(&key);
-  ece_buf_t nonce;
-  ece_buf_reset(&nonce);
 
   ece_buf_t salt;
   uint32_t rs;
@@ -237,17 +243,18 @@ ece_aes128gcm_decrypt(const ece_buf_t* ikm, const ece_buf_t* payload,
     goto end;
   }
 
-  err = ece_aes128gcm_derive_key_and_nonce(&salt, ikm, &key, &nonce);
+  uint8_t key[ECE_KEY_LENGTH];
+  uint8_t nonce[ECE_NONCE_LENGTH];
+  err = ece_aes128gcm_derive_key_and_nonce(salt.bytes, ikm->bytes, ikm->length,
+                                           key, nonce);
   if (err) {
     goto end;
   }
 
-  err = ece_decrypt_records(&key, &nonce, rs, &ciphertext, &ece_aes128gcm_unpad,
+  err = ece_decrypt_records(key, nonce, rs, &ciphertext, &ece_aes128gcm_unpad,
                             plaintext);
 
 end:
-  ece_buf_free(&key);
-  ece_buf_free(&nonce);
   return err;
 }
 
