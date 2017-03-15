@@ -236,7 +236,7 @@ ece_aes128gcm_encrypt(const ece_buf_t* rawRecvPubKey,
     err = ECE_ERROR_OUT_OF_MEMORY;
     goto end;
   }
-  if (RAND_bytes(salt.bytes, salt.length) <= 0) {
+  if (RAND_bytes(salt.bytes, (int) salt.length) <= 0) {
     err = ECE_ERROR_ENCRYPT;
     goto end;
   }

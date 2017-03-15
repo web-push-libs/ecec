@@ -24,8 +24,12 @@
 
 // Extracts an unsigned 32-bit integer in network byte order.
 static inline uint32_t
-ece_read_uint32_be(uint8_t* bytes) {
-  return bytes[3] | (bytes[2] << 8) | (bytes[1] << 16) | (bytes[0] << 24);
+ece_read_uint32_be(const uint8_t* bytes) {
+  uint32_t value = bytes[3];
+  value |= (uint32_t) bytes[2] << 8;
+  value |= (uint32_t) bytes[1] << 16;
+  value |= (uint32_t) bytes[0] << 24;
+  return value;
 }
 
 // A linked list that holds name-value pairs for a parameter in a header

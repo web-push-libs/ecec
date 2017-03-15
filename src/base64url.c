@@ -101,9 +101,9 @@ ece_base64url_decode(const char* base64, size_t base64Len,
       err = ECE_ERROR_INVALID_BASE64URL;
       goto error;
     }
-    *binary++ = w << 2 | x >> 4;
-    *binary++ = x << 4 | y >> 2;
-    *binary++ = y << 6 | z;
+    *binary++ = (w << 2 | x >> 4) & 0xff;
+    *binary++ = (x << 4 | y >> 2) & 0xff;
+    *binary++ = (y << 6 | z) & 0xff;
   }
 
   if (base64Len == 3) {
@@ -114,8 +114,8 @@ ece_base64url_decode(const char* base64, size_t base64Len,
       err = ECE_ERROR_INVALID_BASE64URL;
       goto error;
     }
-    *binary++ = w << 2 | x >> 4;
-    *binary++ = x << 4 | y >> 2;
+    *binary++ = (w << 2 | x >> 4) & 0xff;
+    *binary++ = (x << 4 | y >> 2) & 0xff;
   } else if (base64Len == 2) {
     uint8_t w, x;
     if (!ece_base64url_decode_lookup(*base64++, &w) ||
@@ -123,14 +123,14 @@ ece_base64url_decode(const char* base64, size_t base64Len,
       err = ECE_ERROR_INVALID_BASE64URL;
       goto error;
     }
-    *binary++ = w << 2 | x >> 4;
+    *binary++ = (w << 2 | x >> 4) & 0xff;
   } else if (base64Len) {
     err = ECE_ERROR_INVALID_BASE64URL;
     goto error;
   }
 
   // Set the length to the actual number of decoded bytes.
-  result->length = binary - result->bytes;
+  result->length = (size_t)(binary - result->bytes);
   goto end;
 
 error:

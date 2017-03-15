@@ -14,8 +14,10 @@ typedef int (*unpad_t)(ece_buf_t* block, bool isLastRecord);
 
 // Extracts an unsigned 16-bit integer in network byte order.
 static inline uint16_t
-ece_read_uint16_be(uint8_t* bytes) {
-  return bytes[1] | (bytes[0] << 8);
+ece_read_uint16_be(const uint8_t* bytes) {
+  uint16_t value = (uint16_t) bytes[1];
+  value |= bytes[0] << 8;
+  return value;
 }
 
 // Converts an encrypted record to a decrypted block.
@@ -46,7 +48,7 @@ ece_decrypt_record(EVP_CIPHER_CTX* ctx, const uint8_t* key, const uint8_t* iv,
     err = ECE_ERROR_DECRYPT;
     goto end;
   }
-  block->length = blockLen + finalLen;
+  block->length = (size_t)(blockLen + finalLen);
 
 end:
   EVP_CIPHER_CTX_reset(ctx);

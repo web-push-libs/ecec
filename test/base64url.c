@@ -57,7 +57,7 @@ test_base64url_decode() {
       ece_assert(err == ECE_ERROR_INVALID_BASE64URL,
                  "Got %d decoding `%s` with padding rejected", err, t.encoded);
 
-      size_t unpaddedLen = padStart - t.encoded;
+      size_t unpaddedLen = (size_t)(padStart - t.encoded);
       err = ece_base64url_decode(t.encoded, unpaddedLen,
                                  ECE_BASE64URL_REQUIRE_PADDING, &decoded);
       ece_assert(err == ECE_ERROR_INVALID_BASE64URL,

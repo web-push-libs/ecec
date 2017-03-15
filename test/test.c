@@ -36,7 +36,7 @@ ece_log(const char* funcName, int line, const char* expr, const char* format,
   if (size < 0) {
     goto error;
   }
-  message = (char*) malloc(size + 1);
+  message = malloc((size_t) size + 1);
   if (!message || vsprintf(message, format, args) != size) {
     goto error;
   }
