@@ -343,6 +343,9 @@ ece_aes128gcm_extract_params(const ece_buf_t* payload, ece_buf_t* salt,
   ece_buf_slice(payload, 0, ECE_KEY_LENGTH, salt);
 
   *rs = ece_read_uint32_be(&payload->bytes[ECE_KEY_LENGTH]);
+  if (*rs <= ECE_AES128GCM_RECORD_OVERHEAD) {
+    return ECE_ERROR_INVALID_RS;
+  }
 
   uint8_t keyIdLen = payload->bytes[ECE_KEY_LENGTH + 4];
   if (payload->length < ECE_AES128GCM_HEADER_SIZE + keyIdLen) {

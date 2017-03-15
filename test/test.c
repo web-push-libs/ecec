@@ -12,6 +12,7 @@ main() {
 
   test_aes128gcm_encrypt();
   test_aes128gcm_decrypt_valid_payloads();
+  test_aes128gcm_decrypt_invalid_payloads();
 
   test_base64url_decode();
 

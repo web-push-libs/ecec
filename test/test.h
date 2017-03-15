@@ -34,4 +34,7 @@ void
 test_aes128gcm_decrypt_valid_payloads();
 
 void
+test_aes128gcm_decrypt_invalid_payloads();
+
+void
 test_base64url_decode();

@@ -22,6 +22,13 @@ typedef struct valid_decrypt_test_s {
   const char* payload;
 } valid_decrypt_test_t;
 
+typedef struct invalid_decrypt_test_s {
+  const char* desc;
+  const char* ikm;
+  const char* payload;
+  int err;
+} invalid_decrypt_test_t;
+
 static encrypt_test_t encrypt_tests[] = {
   {
     .desc = "Example from draft-ietf-webpush-encryption-latest",
@@ -86,6 +93,43 @@ static valid_decrypt_test_t valid_decrypt_tests[] = {
                "3jl7A_"
                "yl95bQpu6cVPTpK4Mqgkf1CXztLVBSt2Ks3oZwbuwXPXLWyouBWLVWGNWQexSgS"
                "xsj_Qulcy4a-fN",
+  },
+};
+
+static invalid_decrypt_test_t invalid_decrypt_tests[] = {
+  {
+    .desc = "rs <= block overhead",
+    .ikm = "L7F1wnG5L2tV5PKiUtFFQw",
+    .payload = "dvkdSE6EkdpVxfe_5tM-iQAAAAIA",
+    .err = ECE_ERROR_INVALID_RS,
+  },
+  {
+    .desc = "Zero plaintext",
+    .ikm = "ZMcOZKclVRRR8gjfuqC5cg",
+    .payload = "qtIFfTNTt_83veQq4dUP2gAAACAAu8e5ZXYL8GYrk_Tl1pS3ZfDNFZsoAaU",
+    .err = ECE_ERROR_ZERO_PLAINTEXT,
+  },
+  {
+    .desc = "Bad early padding delimiter",
+    .ikm = "ZMcOZKclVRRR8gjfuqC5cg",
+    .payload = "qtIFfTNTt_"
+               "83veQq4dUP2gAAACAAuce5ZXYL8J5CsQhDOHWjBsl4Bgr8fH3pUoWRi1gCYPNFO"
+               "Hoo5SVmL0jBwzIEsZW1Tp5w1A488-8MZxvgFEl-3A",
+    .err = ECE_ERROR_DECRYPT_PADDING,
+  },
+  {
+    .desc = "Bad final padding delimiter",
+    .ikm = "ZMcOZKclVRRR8gjfuqC5cg",
+    .payload =
+      "qtIFfTNTt_83veQq4dUP2gAAACAAuse5ZXYL8J5CsQhKaeRQG41J28Z5I01HwlcW",
+    .err = ECE_ERROR_DECRYPT_PADDING,
+  },
+  {
+    .desc = "Invalid auth tag",
+    .ikm = "ZMcOZKclVRRR8gjfuqC5cg",
+    .payload =
+      "qtIFfTNTt_83veQq4dUP2gAAACAAu8axHUY6fg8HK76qRODWLkvl-V0l44Zx4H0",
+    .err = ECE_ERROR_DECRYPT,
   },
 };
 
@@ -197,5 +241,31 @@ test_aes128gcm_decrypt_valid_payloads() {
     ece_buf_free(&authSecret);
     ece_buf_free(&payload);
     ece_buf_free(&plaintext);
+  }
+}
+
+void
+test_aes128gcm_decrypt_invalid_payloads() {
+  size_t tests = sizeof(invalid_decrypt_tests) / sizeof(invalid_decrypt_test_t);
+  for (size_t i = 0; i < tests; i++) {
+    invalid_decrypt_test_t t = invalid_decrypt_tests[i];
+
+    ece_buf_t ikm;
+    int err = ece_base64url_decode(t.ikm, strlen(t.ikm),
+                                   ECE_BASE64URL_REJECT_PADDING, &ikm);
+    ece_assert(!err, "Got %d decoding input key for `%s`", err, t.desc);
+
+    ece_buf_t payload;
+    err = ece_base64url_decode(t.payload, strlen(t.payload),
+                               ECE_BASE64URL_REJECT_PADDING, &payload);
+    ece_assert(!err, "Got %d decoding payload for `%s`", err, t.desc);
+
+    ece_buf_t plaintext;
+    err = ece_aes128gcm_decrypt(&ikm, &payload, &plaintext);
+    ece_assert(err == t.err, "Got %d decrypting payload for `%s`; want %d", err,
+               t.desc, t.err);
+
+    ece_buf_free(&ikm);
+    ece_buf_free(&payload);
   }
 }
