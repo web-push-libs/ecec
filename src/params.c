@@ -22,6 +22,12 @@
 #define ECE_HEADER_STATE_END_VALUE 9
 #define ECE_HEADER_STATE_INVALID_HEADER 10
 
+// Extracts an unsigned 32-bit integer in network byte order.
+static inline uint32_t
+ece_read_uint32_be(uint8_t* bytes) {
+  return bytes[3] | (bytes[2] << 8) | (bytes[1] << 16) | (bytes[0] << 24);
+}
+
 // A linked list that holds name-value pairs for a parameter in a header
 // value. For example, if the parameter is `a=b; c=d; e=f`, the parser will
 // allocate three `ece_header_pairs_t` structures, one for each ;-delimited
@@ -327,10 +333,37 @@ error:
 }
 
 int
-ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
-                                        const char* encryptionHeader,
-                                        uint32_t* rs, ece_buf_t* salt,
-                                        ece_buf_t* rawSenderPubKey) {
+ece_aes128gcm_extract_params(const ece_buf_t* payload, ece_buf_t* salt,
+                             uint32_t* rs, ece_buf_t* keyId,
+                             ece_buf_t* ciphertext) {
+  if (payload->length < ECE_AES128GCM_HEADER_SIZE) {
+    return ECE_ERROR_SHORT_HEADER;
+  }
+
+  ece_buf_slice(payload, 0, ECE_KEY_LENGTH, salt);
+
+  *rs = ece_read_uint32_be(&payload->bytes[ECE_KEY_LENGTH]);
+
+  uint8_t keyIdLen = payload->bytes[ECE_KEY_LENGTH + 4];
+  if (payload->length < ECE_AES128GCM_HEADER_SIZE + keyIdLen) {
+    return ECE_ERROR_SHORT_HEADER;
+  }
+  ece_buf_slice(payload, ECE_AES128GCM_HEADER_SIZE,
+                ECE_AES128GCM_HEADER_SIZE + keyIdLen, keyId);
+
+  ece_buf_slice(payload, ECE_AES128GCM_HEADER_SIZE + keyIdLen, payload->length,
+                ciphertext);
+  if (!ciphertext->length) {
+    return ECE_ERROR_ZERO_CIPHERTEXT;
+  }
+
+  return ECE_OK;
+}
+
+int
+ece_webpush_aesgcm_extract_params(const char* cryptoKeyHeader,
+                                  const char* encryptionHeader, uint32_t* rs,
+                                  ece_buf_t* salt, ece_buf_t* rawSenderPubKey) {
   int err = ECE_OK;
 
   ece_buf_reset(salt);

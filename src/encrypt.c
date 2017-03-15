@@ -126,9 +126,9 @@ ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
     goto end;
   }
 
-  err = ece_aes128gcm_derive_key_and_nonce(ECE_MODE_ENCRYPT, senderPrivKey,
-                                           recvPubKey, authSecret, salt, &key,
-                                           &nonce);
+  err = ece_webpush_aes128gcm_derive_key_and_nonce(
+    ECE_MODE_ENCRYPT, senderPrivKey, recvPubKey, authSecret, salt, &key,
+    &nonce);
   if (err) {
     goto end;
   }

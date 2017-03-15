@@ -182,8 +182,8 @@ test_aes128gcm_decrypt_valid_payloads() {
     ece_assert(!err, "Got %d decoding payload for `%s`", err, t.desc);
 
     ece_buf_t plaintext;
-    err =
-      ece_aes128gcm_decrypt(&rawRecvPrivKey, &authSecret, &payload, &plaintext);
+    err = ece_webpush_aes128gcm_decrypt(&rawRecvPrivKey, &authSecret, &payload,
+                                        &plaintext);
     ece_assert(!err, "Got %d decrypting payload for `%s`", err, t.desc);
 
     size_t expectedLen = strlen(t.plaintext);

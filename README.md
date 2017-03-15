@@ -92,8 +92,8 @@ payload.length = 0;
 // `free(plaintext.bytes)`.
 ece_buf_t plaintext;
 
-int err =
-  ece_aes128gcm_decrypt(&rawSubPrivKey, &authSecret, &payload, &plaintext);
+int err = ece_webpush_aes128gcm_decrypt(&rawSubPrivKey, &authSecret, &payload,
+                                        &plaintext);
 
 assert(!err);
 ece_buf_free(&plaintext);
@@ -114,15 +114,16 @@ If the `Crypto-Key` header contains multiple keys, the sender must also include 
 const char* cryptoKeyHeader = "dh=...";
 const char* encryptionHeader = "salt=...; rs=...";
 
-// The same ownership rules apply as for `ece_aes128gcm_decrypt`.
+// The same ownership rules apply as for `ece_webpush_aes128gcm_decrypt`.
 ece_buf_t ciphertext;
 ciphertext.bytes = NULL;
 ciphertext.length = 0;
 
 ece_buf_t plaintext;
 
-int err = ece_aesgcm_decrypt(&rawSubPrivKey, &authSecret, cryptoKeyHeader,
-                             encryptionHeader, &ciphertext, &plaintext);
+int err = ece_webpush_aesgcm_decrypt(&rawSubPrivKey, &authSecret,
+                                     cryptoKeyHeader, encryptionHeader,
+                                     &ciphertext, &plaintext);
 
 assert(!err);
 ece_buf_free(&plaintext);

@@ -177,12 +177,13 @@ end:
   return err;
 }
 
-// The "aes128gcm" info string is "WebPush: info\0", followed by the receiver
+// The "aes128gcm" IKM info string is "WebPush: info\0", followed by the
+// receiver
 // and sender public keys.
 static int
-ece_aes128gcm_generate_info(EC_KEY* recvKey, EC_KEY* senderKey,
-                            const char* prefix, size_t prefixLen,
-                            ece_buf_t* info) {
+ece_webpush_aes128gcm_generate_info(EC_KEY* recvKey, EC_KEY* senderKey,
+                                    const char* prefix, size_t prefixLen,
+                                    ece_buf_t* info) {
   int err = ECE_OK;
 
   // Build up the HKDF info string: "WebPush: info\0", followed by the receiver
@@ -242,16 +243,15 @@ end:
   return err;
 }
 
-// Derives the "aes128gcm" content encryption key and nonce.
 int
-ece_aes128gcm_derive_key_and_nonce(const ece_buf_t* salt, const ece_buf_t* ikm, ece_buf_t* key, ece_buf_t* nonce) {
-  // These buffers are stack-allocated, so they shouldn't be freed.
+ece_aes128gcm_derive_key_and_nonce(const ece_buf_t* salt, const ece_buf_t* ikm,
+                                   ece_buf_t* key, ece_buf_t* nonce) {
   uint8_t keyInfoBytes[ECE_AES128GCM_KEY_INFO_LENGTH];
   memcpy(keyInfoBytes, ECE_AES128GCM_KEY_INFO, ECE_AES128GCM_KEY_INFO_LENGTH);
   ece_buf_t keyInfo;
   keyInfo.bytes = keyInfoBytes;
   keyInfo.length = ECE_AES128GCM_KEY_INFO_LENGTH;
-  int err = ece_hkdf_sha256(salt, &ikm, &keyInfo, ECE_KEY_LENGTH, key);
+  int err = ece_hkdf_sha256(salt, ikm, &keyInfo, ECE_KEY_LENGTH, key);
   if (err) {
     return err;
   }
@@ -262,14 +262,15 @@ ece_aes128gcm_derive_key_and_nonce(const ece_buf_t* salt, const ece_buf_t* ikm, 
   ece_buf_t nonceInfo;
   nonceInfo.bytes = nonceInfoBytes;
   nonceInfo.length = ECE_AES128GCM_NONCE_INFO_LENGTH;
-  return ece_hkdf_sha256(salt, &ikm, &nonceInfo, ECE_NONCE_LENGTH, nonce);
+  return ece_hkdf_sha256(salt, ikm, &nonceInfo, ECE_NONCE_LENGTH, nonce);
 }
 
 int
-ece_aes128gcm_webpush_derive_key_and_nonce(ece_mode_t mode, EC_KEY* localKey,
-                                   EC_KEY* remoteKey, const ece_buf_t* authSecret,
-                                   const ece_buf_t* salt, ece_buf_t* key,
-                                   ece_buf_t* nonce) {
+ece_webpush_aes128gcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* localKey,
+                                           EC_KEY* remoteKey,
+                                           const ece_buf_t* authSecret,
+                                           const ece_buf_t* salt,
+                                           ece_buf_t* key, ece_buf_t* nonce) {
   int err = ECE_OK;
 
   ece_buf_t sharedSecret;
@@ -290,7 +291,7 @@ ece_aes128gcm_webpush_derive_key_and_nonce(ece_mode_t mode, EC_KEY* localKey,
   case ECE_MODE_ENCRYPT:
     // For encryption, the remote static public key is the receiver key, and the
     // local ephemeral private key is the sender key.
-    err = ece_aes128gcm_generate_info(
+    err = ece_webpush_aes128gcm_generate_info(
       remoteKey, localKey, ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX,
       ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX_LENGTH, &ikmInfo);
     break;
@@ -298,7 +299,7 @@ ece_aes128gcm_webpush_derive_key_and_nonce(ece_mode_t mode, EC_KEY* localKey,
   case ECE_MODE_DECRYPT:
     // For decryption, the local static private key is the receiver key, and the
     // remote ephemeral public key is the sender key.
-    err = ece_aes128gcm_generate_info(
+    err = ece_webpush_aes128gcm_generate_info(
       localKey, remoteKey, ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX,
       ECE_AES128GCM_WEB_PUSH_PRK_INFO_PREFIX_LENGTH, &ikmInfo);
     break;
@@ -320,8 +321,8 @@ ece_aes128gcm_webpush_derive_key_and_nonce(ece_mode_t mode, EC_KEY* localKey,
 
 end:
   ece_buf_free(&sharedSecret);
-  ece_buf_free(&prkInfo);
-  ece_buf_free(&prk);
+  ece_buf_free(&ikmInfo);
+  ece_buf_free(&ikm);
   return err;
 }
 
@@ -329,9 +330,9 @@ end:
 // followed by the length-prefixed (unsigned 16-bit integers) receiver and
 // sender public keys.
 static int
-ece_aesgcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
-                         const char* prefix, size_t prefixLen,
-                         ece_buf_t* info) {
+ece_webpush_aesgcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
+                                 const char* prefix, size_t prefixLen,
+                                 ece_buf_t* info) {
   int err = ECE_OK;
 
   const EC_GROUP* recvGrp = EC_KEY_get0_group(recvPrivKey);
@@ -395,14 +396,12 @@ end:
   return err;
 }
 
-// Derives the "aesgcm" decryption key and nonce given the receiver private key,
-// sender public key, authentication secret, and sender salt.
 int
-ece_aesgcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* recvPrivKey,
-                                EC_KEY* senderPubKey,
-                                const ece_buf_t* authSecret,
-                                const ece_buf_t* salt, ece_buf_t* key,
-                                ece_buf_t* nonce) {
+ece_webpush_aesgcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* recvPrivKey,
+                                        EC_KEY* senderPubKey,
+                                        const ece_buf_t* authSecret,
+                                        const ece_buf_t* salt, ece_buf_t* key,
+                                        ece_buf_t* nonce) {
   int err = ECE_OK;
 
   ece_buf_t sharedSecret;
@@ -435,7 +434,7 @@ ece_aesgcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* recvPrivKey,
 
   // Next, derive the AES decryption key and nonce. We include the sender and
   // receiver public keys in the info strings.
-  err = ece_aesgcm_generate_info(
+  err = ece_webpush_aesgcm_generate_info(
     recvPrivKey, senderPubKey, ECE_AESGCM_WEB_PUSH_KEY_INFO_PREFIX,
     ECE_AESGCM_WEB_PUSH_KEY_INFO_PREFIX_LENGTH, &keyInfo);
   if (err) {
@@ -445,7 +444,7 @@ ece_aesgcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* recvPrivKey,
   if (err) {
     goto end;
   }
-  err = ece_aesgcm_generate_info(
+  err = ece_webpush_aesgcm_generate_info(
     recvPrivKey, senderPubKey, ECE_AESGCM_WEB_PUSH_NONCE_INFO_PREFIX,
     ECE_AESGCM_WEB_PUSH_NONCE_INFO_PREFIX_LENGTH, &nonceInfo);
   if (err) {

@@ -18,12 +18,6 @@ ece_read_uint16_be(uint8_t* bytes) {
   return bytes[1] | (bytes[0] << 8);
 }
 
-// Extracts an unsigned 32-bit integer in network byte order.
-static inline uint32_t
-ece_read_uint32_be(uint8_t* bytes) {
-  return bytes[3] | (bytes[2] << 8) | (bytes[1] << 16) | (bytes[0] << 24);
-}
-
 // Converts an encrypted record to a decrypted block.
 static int
 ece_decrypt_record(const ece_buf_t* key, const ece_buf_t* nonce, size_t counter,
@@ -74,43 +68,13 @@ end:
   return err;
 }
 
-// A generic decryption function shared by "aesgcm" and "aes128gcm".
-// `deriveKeyAndNonce` and `unpad` are function pointers that change based on
-// the scheme.
 static int
-ece_decrypt(const ece_buf_t* rawRecvPrivKey, const ece_buf_t* rawSenderPubKey,
-            const ece_buf_t* authSecret, const ece_buf_t* salt, uint32_t rs,
-            const ece_buf_t* ciphertext,
-            derive_key_and_nonce_t deriveKeyAndNonce, unpad_t unpad,
-            ece_buf_t* plaintext) {
+ece_decrypt_records(const ece_buf_t* key, const ece_buf_t* nonce, uint32_t rs,
+                    const ece_buf_t* ciphertext, unpad_t unpad,
+                    ece_buf_t* plaintext) {
   int err = ECE_OK;
 
   ece_buf_reset(plaintext);
-
-  EC_KEY* recvPrivKey = NULL;
-  EC_KEY* senderPubKey = NULL;
-
-  ece_buf_t key;
-  ece_buf_reset(&key);
-  ece_buf_t nonce;
-  ece_buf_reset(&nonce);
-
-  recvPrivKey = ece_import_private_key(rawRecvPrivKey);
-  if (!recvPrivKey) {
-    err = ECE_INVALID_RECEIVER_PRIVATE_KEY;
-    goto end;
-  }
-  senderPubKey = ece_import_public_key(rawSenderPubKey);
-  if (!senderPubKey) {
-    err = ECE_INVALID_SENDER_PUBLIC_KEY;
-    goto end;
-  }
-
-  err = deriveKeyAndNonce(ECE_MODE_DECRYPT, recvPrivKey, senderPubKey,
-                          authSecret, salt, &key, &nonce);
-  if (err) {
-    goto error;
-  }
 
   // For simplicity, we allocate a buffer equal to the encrypted record size,
   // even though the decrypted block will be smaller. `ece_decrypt_record`
@@ -134,7 +98,7 @@ ece_decrypt(const ece_buf_t* rawRecvPrivKey, const ece_buf_t* rawSenderPubKey,
     ece_buf_slice(ciphertext, start, end, &record);
     ece_buf_t block;
     ece_buf_slice(plaintext, offset, end - start, &block);
-    err = ece_decrypt_record(&key, &nonce, counter, &record, &block);
+    err = ece_decrypt_record(key, nonce, counter, &record, &block);
     if (err) {
       goto error;
     }
@@ -150,6 +114,49 @@ ece_decrypt(const ece_buf_t* rawRecvPrivKey, const ece_buf_t* rawSenderPubKey,
 
 error:
   ece_buf_free(plaintext);
+
+end:
+  return err;
+}
+
+// A generic decryption function shared by "aesgcm" and "aes128gcm".
+// `deriveKeyAndNonce` and `unpad` are function pointers that change based on
+// the scheme.
+static int
+ece_webpush_decrypt(const ece_buf_t* rawRecvPrivKey,
+                    const ece_buf_t* rawSenderPubKey,
+                    const ece_buf_t* authSecret, const ece_buf_t* salt,
+                    uint32_t rs, const ece_buf_t* ciphertext,
+                    derive_key_and_nonce_t deriveKeyAndNonce, unpad_t unpad,
+                    ece_buf_t* plaintext) {
+  int err = ECE_OK;
+
+  EC_KEY* recvPrivKey = NULL;
+  EC_KEY* senderPubKey = NULL;
+
+  ece_buf_t key;
+  ece_buf_reset(&key);
+  ece_buf_t nonce;
+  ece_buf_reset(&nonce);
+
+  recvPrivKey = ece_import_private_key(rawRecvPrivKey);
+  if (!recvPrivKey) {
+    err = ECE_INVALID_RECEIVER_PRIVATE_KEY;
+    goto end;
+  }
+  senderPubKey = ece_import_public_key(rawSenderPubKey);
+  if (!senderPubKey) {
+    err = ECE_INVALID_SENDER_PUBLIC_KEY;
+    goto end;
+  }
+
+  err = deriveKeyAndNonce(ECE_MODE_DECRYPT, recvPrivKey, senderPubKey,
+                          authSecret, salt, &key, &nonce);
+  if (err) {
+    goto end;
+  }
+
+  err = ece_decrypt_records(&key, &nonce, rs, ciphertext, unpad, plaintext);
 
 end:
   EC_KEY_free(recvPrivKey);
@@ -211,37 +218,65 @@ ece_aes128gcm_unpad(ece_buf_t* block, bool isLastRecord) {
 }
 
 int
-ece_aes128gcm_decrypt(const ece_buf_t* rawRecvPrivKey,
-                      const ece_buf_t* authSecret, const ece_buf_t* payload,
+ece_aes128gcm_decrypt(const ece_buf_t* ikm, const ece_buf_t* payload,
                       ece_buf_t* plaintext) {
-  if (payload->length < ECE_AES128GCM_HEADER_SIZE) {
-    return ECE_ERROR_SHORT_HEADER;
-  }
+  int err = ECE_OK;
+
+  ece_buf_t key;
+  ece_buf_reset(&key);
+  ece_buf_t nonce;
+  ece_buf_reset(&nonce);
+
   ece_buf_t salt;
-  ece_buf_slice(payload, 0, ECE_KEY_LENGTH, &salt);
-  uint32_t rs = ece_read_uint32_be(&payload->bytes[ECE_KEY_LENGTH]);
-  uint8_t keyIdLen = payload->bytes[ECE_KEY_LENGTH + 4];
-  if (payload->length < ECE_AES128GCM_HEADER_SIZE + keyIdLen) {
-    return ECE_ERROR_SHORT_HEADER;
-  }
+  uint32_t rs;
   ece_buf_t rawSenderPubKey;
-  ece_buf_slice(payload, ECE_AES128GCM_HEADER_SIZE,
-                ECE_AES128GCM_HEADER_SIZE + keyIdLen, &rawSenderPubKey);
   ece_buf_t ciphertext;
-  ece_buf_slice(payload, ECE_AES128GCM_HEADER_SIZE + keyIdLen, payload->length,
-                &ciphertext);
-  if (!ciphertext.length) {
-    return ECE_ERROR_ZERO_CIPHERTEXT;
+  err = ece_aes128gcm_extract_params(payload, &salt, &rs, &rawSenderPubKey,
+                                     &ciphertext);
+  if (err) {
+    goto end;
   }
-  return ece_decrypt(rawRecvPrivKey, &rawSenderPubKey, authSecret, &salt, rs,
-                     &ciphertext, &ece_aes128gcm_derive_key_and_nonce,
-                     &ece_aes128gcm_unpad, plaintext);
+
+  err = ece_aes128gcm_derive_key_and_nonce(&salt, ikm, &key, &nonce);
+  if (err) {
+    goto end;
+  }
+
+  err = ece_decrypt_records(&key, &nonce, rs, &ciphertext, &ece_aes128gcm_unpad,
+                            plaintext);
+
+end:
+  ece_buf_free(&key);
+  ece_buf_free(&nonce);
+  return err;
 }
 
 int
-ece_aesgcm_decrypt(const ece_buf_t* rawRecvPrivKey, const ece_buf_t* authSecret,
-                   const char* cryptoKeyHeader, const char* encryptionHeader,
-                   const ece_buf_t* ciphertext, ece_buf_t* plaintext) {
+ece_webpush_aes128gcm_decrypt(const ece_buf_t* rawRecvPrivKey,
+                              const ece_buf_t* authSecret,
+                              const ece_buf_t* payload, ece_buf_t* plaintext) {
+  ece_buf_t salt;
+  uint32_t rs;
+  ece_buf_t rawSenderPubKey;
+  ece_buf_t ciphertext;
+  int err = ece_aes128gcm_extract_params(payload, &salt, &rs, &rawSenderPubKey,
+                                         &ciphertext);
+  if (err) {
+    return err;
+  }
+
+  return ece_webpush_decrypt(rawRecvPrivKey, &rawSenderPubKey, authSecret,
+                             &salt, rs, &ciphertext,
+                             &ece_webpush_aes128gcm_derive_key_and_nonce,
+                             &ece_aes128gcm_unpad, plaintext);
+}
+
+int
+ece_webpush_aesgcm_decrypt(const ece_buf_t* rawRecvPrivKey,
+                           const ece_buf_t* authSecret,
+                           const char* cryptoKeyHeader,
+                           const char* encryptionHeader,
+                           const ece_buf_t* ciphertext, ece_buf_t* plaintext) {
   int err = ECE_OK;
 
   ece_buf_t rawSenderPubKey;
@@ -250,15 +285,15 @@ ece_aesgcm_decrypt(const ece_buf_t* rawRecvPrivKey, const ece_buf_t* authSecret,
   ece_buf_reset(&salt);
 
   uint32_t rs;
-  err = ece_header_extract_aesgcm_crypto_params(
-    cryptoKeyHeader, encryptionHeader, &rs, &salt, &rawSenderPubKey);
+  err = ece_webpush_aesgcm_extract_params(cryptoKeyHeader, encryptionHeader,
+                                          &rs, &salt, &rawSenderPubKey);
   if (err) {
     goto end;
   }
   rs += ECE_TAG_LENGTH;
-  err = ece_decrypt(rawRecvPrivKey, &rawSenderPubKey, authSecret, &salt, rs,
-                    ciphertext, &ece_aesgcm_derive_key_and_nonce,
-                    &ece_aesgcm_unpad, plaintext);
+  err = ece_webpush_decrypt(
+    rawRecvPrivKey, &rawSenderPubKey, authSecret, &salt, rs, ciphertext,
+    &ece_webpush_aesgcm_derive_key_and_nonce, &ece_aesgcm_unpad, plaintext);
 
 end:
   ece_buf_free(&rawSenderPubKey);

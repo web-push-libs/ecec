@@ -88,9 +88,13 @@ typedef enum ece_mode_e {
   ECE_MODE_DECRYPT,
 } ece_mode_t;
 
+int
+ece_aes128gcm_decrypt(const ece_buf_t* ikm, const ece_buf_t* payload,
+                      ece_buf_t* plaintext);
+
 // Decrypts a payload encrypted with the "aes128gcm" scheme.
 int
-ece_aes128gcm_decrypt(
+ece_webpush_aes128gcm_decrypt(
   // The ECDH private key for the push subscription, encoded as an octet
   // string.
   const ece_buf_t* rawRecvPrivKey,
@@ -130,7 +134,7 @@ ece_aes128gcm_encrypt_with_keys(const ece_buf_t* rawSenderPrivKey,
 
 // Decrypts a payload encrypted with the "aesgcm" scheme.
 int
-ece_aesgcm_decrypt(
+ece_webpush_aesgcm_decrypt(
   // The ECDH private key for the push subscription, encoded as an octet
   // string.
   const ece_buf_t* rawRecvPrivKey,
@@ -146,14 +150,20 @@ ece_aesgcm_decrypt(
   // as for `ece_aes128gcm_decrypt`.
   ece_buf_t* plaintext);
 
+// Extracts the salt, record size, ephemeral public key, and ciphertext from a
+// payload encrypted with the "aes128gcm" scheme.
+int
+ece_aes128gcm_extract_params(const ece_buf_t* payload, ece_buf_t* salt,
+                             uint32_t* rs, ece_buf_t* keyId,
+                             ece_buf_t* ciphertext);
+
 // Extracts the ephemeral public key, salt, and record size from the sender's
 // `Crypto-Key` and `Encryption` headers. The caller takes ownership of `salt`
 // and `rawSenderPubKey` if parsing succeeds.
 int
-ece_header_extract_aesgcm_crypto_params(const char* cryptoKeyHeader,
-                                        const char* encryptionHeader,
-                                        uint32_t* rs, ece_buf_t* salt,
-                                        ece_buf_t* rawSenderPubKey);
+ece_webpush_aesgcm_extract_params(const char* cryptoKeyHeader,
+                                  const char* encryptionHeader, uint32_t* rs,
+                                  ece_buf_t* salt, ece_buf_t* rawSenderPubKey);
 
 // Initializes a non-zero-filled buffer with the requested length.
 bool
