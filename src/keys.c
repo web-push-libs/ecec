@@ -13,35 +13,42 @@ ece_write_uint16_be(uint8_t* bytes, uint16_t value) {
   bytes[1] = value & 0xff;
 }
 
-// Extracts an unsigned 48-bit integer in network byte order.
+// Extracts an unsigned 64-bit integer in network byte order.
 static inline uint64_t
-ece_read_uint48_be(const uint8_t* bytes) {
-  return bytes[5] | (bytes[4] << 8) | (bytes[3] << 16) |
-         ((uint64_t) bytes[2] << 24) | ((uint64_t) bytes[1] << 32) |
-         ((uint64_t) bytes[0] << 40);
+ece_read_uint64_be(const uint8_t* bytes) {
+  uint64_t value = bytes[7];
+  value |= (uint64_t) bytes[6] << 8;
+  value |= (uint64_t) bytes[5] << 16;
+  value |= (uint64_t) bytes[4] << 24;
+  value |= (uint64_t) bytes[3] << 32;
+  value |= (uint64_t) bytes[2] << 40;
+  value |= (uint64_t) bytes[1] << 48;
+  value |= (uint64_t) bytes[0] << 56;
+  return value;
 }
 
-// Writes an unsigned 48-bit integer in network byte order.
+// Writes an unsigned 64-bit integer in network byte order.
 static inline void
-ece_write_uint48_be(uint8_t* bytes, uint64_t value) {
-  bytes[0] = (value >> 40) & 0xff;
-  bytes[1] = (value >> 32) & 0xff;
-  bytes[2] = (value >> 24) & 0xff;
-  bytes[3] = (value >> 16) & 0xff;
-  bytes[4] = (value >> 8) & 0xff;
-  bytes[5] = value & 0xff;
+ece_write_uint64_be(uint8_t* bytes, uint64_t value) {
+  bytes[0] = (value >> 56) & 0xff;
+  bytes[1] = (value >> 48) & 0xff;
+  bytes[2] = (value >> 40) & 0xff;
+  bytes[3] = (value >> 32) & 0xff;
+  bytes[4] = (value >> 24) & 0xff;
+  bytes[5] = (value >> 16) & 0xff;
+  bytes[6] = (value >> 8) & 0xff;
+  bytes[7] = value & 0xff;
 }
 
 void
 ece_generate_iv(const uint8_t* nonce, uint64_t counter, uint8_t* iv) {
-  // Copy the first 6 bytes as-is, since `(x ^ 0) == x`.
-  size_t offset = ECE_NONCE_LENGTH - 6;
+  // Copy the first 4 bytes as-is, since `(x ^ 0) == x`.
+  size_t offset = ECE_NONCE_LENGTH - 8;
   memcpy(iv, nonce, offset);
-  // Combine the remaining 6 bytes (an unsigned 48-bit integer) with the
-  // record sequence number using XOR. See the "nonce derivation" section
-  // of the draft.
-  uint64_t mask = ece_read_uint48_be(&nonce[offset]);
-  ece_write_uint48_be(&iv[offset], mask ^ counter);
+  // Combine the remaining unsigned 64-bit integer with the record sequence
+  // number using XOR. See the "nonce derivation" section of the draft.
+  uint64_t mask = ece_read_uint64_be(&nonce[offset]);
+  ece_write_uint64_be(&iv[offset], mask ^ counter);
 }
 
 EC_KEY*
