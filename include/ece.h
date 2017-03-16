@@ -8,46 +8,19 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 
-#define ECE_TAG_LENGTH 16
-#define ECE_KEY_LENGTH 16
-#define ECE_NONCE_LENGTH 12
-#define ECE_SHA_256_LENGTH 32
-
 #define ECE_SALT_LENGTH 16
-#define ECE_PUBLIC_KEY_LENGTH 65
+#define ECE_WEBPUSH_AUTH_SECRET_LENGTH 16
 
-#define ECE_AES128GCM_HEADER_SIZE 21
+#define ECE_AES128GCM_HEADER_LENGTH 21
 #define ECE_AES128GCM_MAX_KEY_ID_LENGTH 255
 #define ECE_AES128GCM_RECORD_OVERHEAD 17
-#define ECE_AESGCM_PAD_SIZE 2
-
-// HKDF info strings for the "aesgcm" scheme.
-#define ECE_AESGCM_WEB_PUSH_IKM_INFO "Content-Encoding: auth\0"
-#define ECE_AESGCM_WEB_PUSH_IKM_INFO_LENGTH 23
-#define ECE_AESGCM_WEB_PUSH_KEY_INFO_PREFIX "Content-Encoding: aesgcm\0P-256\0"
-#define ECE_AESGCM_WEB_PUSH_KEY_INFO_PREFIX_LENGTH 31
-#define ECE_AESGCM_WEB_PUSH_KEY_INFO_LENGTH 165
-#define ECE_AESGCM_WEB_PUSH_NONCE_INFO_PREFIX "Content-Encoding: nonce\0P-256\0"
-#define ECE_AESGCM_WEB_PUSH_NONCE_INFO_PREFIX_LENGTH 30
-#define ECE_AESGCM_WEB_PUSH_NONCE_INFO_LENGTH 164
-
-// HKDF info strings for the shared secret, encryption key, and nonce for the
-// "aes128gcm" scheme. Note that the length includes the NUL terminator.
-#define ECE_AES128GCM_WEB_PUSH_IKM_INFO_PREFIX "WebPush: info\0"
-#define ECE_AES128GCM_WEB_PUSH_IKM_INFO_PREFIX_LENGTH 14
-#define ECE_AES128GCM_WEB_PUSH_IKM_INFO_LENGTH 144
-#define ECE_AES128GCM_KEY_INFO "Content-Encoding: aes128gcm\0"
-#define ECE_AES128GCM_KEY_INFO_LENGTH 28
-#define ECE_AES128GCM_NONCE_INFO "Content-Encoding: nonce\0"
-#define ECE_AES128GCM_NONCE_INFO_LENGTH 24
 
 #define ECE_OK 0
 #define ECE_ERROR_OUT_OF_MEMORY -1
-#define ECE_INVALID_RECEIVER_PRIVATE_KEY -2
-#define ECE_INVALID_SENDER_PUBLIC_KEY -3
+#define ECE_INVALID_PRIVATE_KEY -2
+#define ECE_INVALID_PUBLIC_KEY -3
 #define ECE_ERROR_COMPUTE_SECRET -4
-#define ECE_ERROR_ENCODE_RECEIVER_PUBLIC_KEY -5
-#define ECE_ERROR_ENCODE_SENDER_PUBLIC_KEY -6
+#define ECE_ERROR_ENCODE_PUBLIC_KEY -5
 #define ECE_ERROR_DECRYPT -7
 #define ECE_ERROR_DECRYPT_PADDING -8
 #define ECE_ERROR_ZERO_PLAINTEXT -9
@@ -93,11 +66,25 @@ typedef enum ece_mode_e {
   ECE_MODE_DECRYPT,
 } ece_mode_t;
 
-int
-ece_aes128gcm_decrypt(const ece_buf_t* ikm, const ece_buf_t* payload,
-                      ece_buf_t* plaintext);
+// Returns the maximum "aes128gcm" decrypted plaintext size, including room for
+// padding. The caller should allocate and pass a buffer of this size as the
+// `payload` argument to the "aes128gcm" decryption functions.
+size_t
+ece_aes128gcm_max_plaintext_length(const ece_buf_t* payload);
 
-// Decrypts a payload encrypted with the "aes128gcm" scheme.
+// Decrypts a message encrypted with the "aes128gcm" scheme. The caller retains
+// ownership of all buffers passed to this function.
+int
+ece_aes128gcm_decrypt(
+  // The input keying material for the content encryption key and nonce.
+  const ece_buf_t* ikm,
+  // The encrypted payload.
+  const ece_buf_t* payload,
+  // The plaintext. Decryption will fail with an error if the buffer is not
+  // large enough to hold the plaintext.
+  ece_buf_t* plaintext);
+
+// Decrypts a Web Push message encrypted with the "aes128gcm" scheme.
 int
 ece_webpush_aes128gcm_decrypt(
   // The ECDH private key for the push subscription, encoded as an octet
@@ -107,13 +94,13 @@ ece_webpush_aes128gcm_decrypt(
   const ece_buf_t* authSecret,
   // The encrypted payload.
   const ece_buf_t* payload,
-  // An in-out parameter to hold the plaintext. The buffer is reset before
-  // decryption, and freed if an error occurs. If decryption succeeds, the
-  // caller takes ownership of the buffer, and should free it when it's done.
+  // The plaintext. Decryption will fail with an error if the buffer is not
+  // large enough to hold the plaintext.
   ece_buf_t* plaintext);
 
-// Returns the maximum encrypted payload size. The caller should allocate and
-// pass a buffer of this size to `ece_aes128gcm_encrypt*`.
+// Returns the maximum encrypted "aes128gcm" payload size. The caller should
+// allocate and pass a buffer of this size as the `payload` argument to
+// `ece_aes128gcm_encrypt*`.
 size_t
 ece_aes128gcm_max_payload_length(uint32_t rs, size_t padLen,
                                  const ece_buf_t* plaintext);
@@ -137,6 +124,12 @@ ece_aes128gcm_encrypt_with_keys(const ece_buf_t* rawSenderPrivKey,
                                 size_t padLen, const ece_buf_t* plaintext,
                                 ece_buf_t* payload);
 
+// Returns the maximum "aesgcm" decrypted plaintext size. The caller should
+// allocate and pass a buffer of this size as the `payload` argument to the
+// "aesgcm" decryption functions.
+size_t
+ece_aesgcm_max_plaintext_length(const ece_buf_t* ciphertext);
+
 // Decrypts a payload encrypted with the "aesgcm" scheme.
 int
 ece_webpush_aesgcm_decrypt(
@@ -151,8 +144,7 @@ ece_webpush_aesgcm_decrypt(
   const char* encryptionHeader,
   // The encrypted message.
   const ece_buf_t* ciphertext,
-  // An in-out parameter to hold the plaintext. The same ownership rules apply
-  // as for `ece_aes128gcm_decrypt`.
+  // The plaintext.
   ece_buf_t* plaintext);
 
 // Extracts the salt, record size, ephemeral public key, and ciphertext from a
@@ -166,9 +158,13 @@ ece_aes128gcm_extract_params(const ece_buf_t* payload, ece_buf_t* salt,
 // `Crypto-Key` and `Encryption` headers. The caller takes ownership of `salt`
 // and `rawSenderPubKey` if parsing succeeds.
 int
-ece_webpush_aesgcm_extract_params(const char* cryptoKeyHeader,
-                                  const char* encryptionHeader, uint32_t* rs,
-                                  ece_buf_t* salt, ece_buf_t* rawSenderPubKey);
+ece_webpush_aesgcm_extract_params(
+  // The sender's `Crypto-Key` header, containing the ephemeral public key.
+  const char* cryptoKeyHeader,
+  // The sender's `Encryption` header, containing the salt and record size.
+  const char* encryptionHeader,
+  // The salt. Must be `ECE_KEY_LENGTH`
+  ece_buf_t* salt, uint32_t* rs, ece_buf_t* rawSenderPubKey);
 
 // Initializes a non-zero-filled buffer with the requested length.
 bool

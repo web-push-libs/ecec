@@ -226,6 +226,11 @@ test_aes128gcm_decrypt_valid_payloads() {
     ece_assert(!err, "Got %d decoding payload for `%s`", err, t.desc);
 
     ece_buf_t plaintext;
+    ece_buf_reset(&plaintext);
+    size_t maxPlaintextLen = ece_aes128gcm_max_plaintext_length(&payload);
+    ece_assert(ece_buf_alloc(&plaintext, maxPlaintextLen),
+               "Failed to allocate plaintext buffer for `%s`", t.desc);
+
     err = ece_webpush_aes128gcm_decrypt(&rawRecvPrivKey, &authSecret, &payload,
                                         &plaintext);
     ece_assert(!err, "Got %d decrypting payload for `%s`", err, t.desc);
@@ -261,6 +266,10 @@ test_aes128gcm_decrypt_invalid_payloads() {
     ece_assert(!err, "Got %d decoding payload for `%s`", err, t.desc);
 
     ece_buf_t plaintext;
+    ece_buf_reset(&plaintext);
+    size_t maxPlaintextLen = ece_aes128gcm_max_plaintext_length(&payload);
+    ece_buf_alloc(&plaintext, maxPlaintextLen);
+
     err = ece_aes128gcm_decrypt(&ikm, &payload, &plaintext);
     ece_assert(err == t.err, "Got %d decrypting payload for `%s`; want %d", err,
                t.desc, t.err);

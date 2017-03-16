@@ -299,8 +299,8 @@ test_aesgcm_valid_crypto_params() {
     ece_buf_t salt;
     ece_buf_t rawSenderPubKey;
 
-    int err = ece_webpush_aesgcm_extract_params(t.cryptoKey, t.encryption, &rs,
-                                                &salt, &rawSenderPubKey);
+    int err = ece_webpush_aesgcm_extract_params(t.cryptoKey, t.encryption,
+                                                &salt, &rs, &rawSenderPubKey);
 
     ece_assert(!err, "Got %d extracting params for `%s`", err, t.desc);
     ece_assert(rs == t.rs, "Got rs = %" PRIu32 " for `%s`; want %" PRIu32, rs,
@@ -335,8 +335,8 @@ test_aesgcm_invalid_crypto_params() {
     ece_buf_t salt;
     ece_buf_t rawSenderPubKey;
 
-    int err = ece_webpush_aesgcm_extract_params(t.cryptoKey, t.encryption, &rs,
-                                                &salt, &rawSenderPubKey);
+    int err = ece_webpush_aesgcm_extract_params(t.cryptoKey, t.encryption,
+                                                &salt, &rs, &rawSenderPubKey);
     ece_assert(err == t.err, "Got %d extracting params for `%s`; want %d", err,
                t.desc, t.err);
     ece_assert(rs == 0, "Got rs = %" PRIu32 " for `%s`; want 0", rs, t.desc);
@@ -371,6 +371,11 @@ test_aesgcm_valid_ciphertexts() {
     ece_assert(!err, "Got %d decoding ciphertext for `%s`", err, t.desc);
 
     ece_buf_t plaintext;
+    ece_buf_reset(&plaintext);
+    size_t maxPlaintextLen = ece_aesgcm_max_plaintext_length(&ciphertext);
+    ece_assert(ece_buf_alloc(&plaintext, maxPlaintextLen),
+               "Failed to allocate plaintext buffer for `%s`", t.desc);
+
     err = ece_webpush_aesgcm_decrypt(&rawRecvPrivKey, &authSecret, t.cryptoKey,
                                      t.encryption, &ciphertext, &plaintext);
     ece_assert(!err, "Got %d decrypting ciphertext for `%s`", err, t.desc);

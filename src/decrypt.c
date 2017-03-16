@@ -7,10 +7,17 @@
 typedef int (*derive_key_and_nonce_t)(ece_mode_t mode, EC_KEY* localKey,
                                       EC_KEY* remoteKey,
                                       const uint8_t* authSecret,
-                                      size_t authSecretLen, const uint8_t* salt,
-                                      uint8_t* key, uint8_t* nonce);
+                                      const uint8_t* salt, uint8_t* key,
+                                      uint8_t* nonce);
 
-typedef int (*unpad_t)(ece_buf_t* block, bool isLastRecord);
+typedef int (*unpad_t)(uint8_t* block, bool isLastRecord, size_t* blockLen);
+
+static inline size_t
+ece_aes128gcm_max_plaintext_length_from_ciphertext(
+  uint32_t rs, const ece_buf_t* ciphertext) {
+  size_t numRecords = (ciphertext->length / rs) + 1;
+  return ciphertext->length - (ECE_TAG_LENGTH * numRecords);
+}
 
 // Extracts an unsigned 16-bit integer in network byte order.
 static inline uint16_t
@@ -23,7 +30,7 @@ ece_read_uint16_be(const uint8_t* bytes) {
 // Converts an encrypted record to a decrypted block.
 static int
 ece_decrypt_record(EVP_CIPHER_CTX* ctx, const uint8_t* key, const uint8_t* iv,
-                   const ece_buf_t* record, ece_buf_t* block) {
+                   uint8_t* record, size_t recordLen, uint8_t* block) {
   int err = ECE_OK;
 
   if (EVP_DecryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key, iv) <= 0) {
@@ -32,23 +39,21 @@ ece_decrypt_record(EVP_CIPHER_CTX* ctx, const uint8_t* key, const uint8_t* iv,
   }
   // The authentication tag is included at the end of the encrypted record.
   if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, ECE_TAG_LENGTH,
-                          &record->bytes[record->length - ECE_TAG_LENGTH]) <=
-      0) {
+                          &record[recordLen - ECE_TAG_LENGTH]) <= 0) {
     err = ECE_ERROR_DECRYPT;
     goto end;
   }
-  int blockLen = 0;
-  if (EVP_DecryptUpdate(ctx, block->bytes, &blockLen, record->bytes,
-                        (int) record->length - ECE_TAG_LENGTH) <= 0) {
+  int updateLen = 0;
+  if (EVP_DecryptUpdate(ctx, block, &updateLen, record,
+                        (int) recordLen - ECE_TAG_LENGTH) <= 0) {
     err = ECE_ERROR_DECRYPT;
     goto end;
   }
-  int finalLen = 0;
+  int finalLen = -1;
   if (EVP_DecryptFinal_ex(ctx, NULL, &finalLen) <= 0) {
     err = ECE_ERROR_DECRYPT;
     goto end;
   }
-  block->length = (size_t)(blockLen + finalLen);
 
 end:
   EVP_CIPHER_CTX_reset(ctx);
@@ -61,59 +66,51 @@ ece_decrypt_records(const uint8_t* key, const uint8_t* nonce, uint32_t rs,
                     ece_buf_t* plaintext) {
   int err = ECE_OK;
 
-  ece_buf_reset(plaintext);
+  EVP_CIPHER_CTX* ctx = NULL;
 
-  EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+  ctx = EVP_CIPHER_CTX_new();
   if (!ctx) {
     err = ECE_ERROR_OUT_OF_MEMORY;
-    goto error;
+    goto end;
   }
 
-  // For simplicity, we allocate a buffer equal to the encrypted record size,
-  // even though the decrypted block will be smaller. `ece_decrypt_record`
-  // will set the actual length.
-  if (!ece_buf_alloc(plaintext, ciphertext->length)) {
-    err = ECE_ERROR_OUT_OF_MEMORY;
-    goto error;
-  }
-
-  size_t start = 0;
-  size_t offset = 0;
-  for (size_t counter = 0; start < ciphertext->length; counter++) {
-    size_t end = start + rs;
-    if (end > ciphertext->length) {
-      end = ciphertext->length;
+  size_t recordStart = 0;
+  size_t blockStart = 0;
+  for (size_t counter = 0; recordStart < ciphertext->length; counter++) {
+    size_t recordEnd = recordStart + rs;
+    if (recordEnd > ciphertext->length) {
+      recordEnd = ciphertext->length;
     }
-    if (end - start <= ECE_TAG_LENGTH) {
+    size_t recordLen = recordEnd - recordStart;
+    if (recordLen <= ECE_TAG_LENGTH) {
       err = ECE_ERROR_SHORT_BLOCK;
-      goto error;
+      goto end;
     }
-    ece_buf_t record;
-    ece_buf_slice(ciphertext, start, end, &record);
 
-    ece_buf_t block;
-    ece_buf_slice(plaintext, offset, end - start, &block);
+    size_t blockEnd = blockStart + recordLen - ECE_TAG_LENGTH;
+    if (blockEnd > plaintext->length) {
+      blockEnd = plaintext->length;
+    }
 
     // Generate the IV for this record using the nonce.
     uint8_t iv[ECE_NONCE_LENGTH];
     ece_generate_iv(nonce, counter, iv);
 
-    err = ece_decrypt_record(ctx, key, iv, &record, &block);
+    err = ece_decrypt_record(ctx, key, iv, &ciphertext->bytes[recordStart],
+                             recordLen, &plaintext->bytes[blockStart]);
     if (err) {
-      goto error;
+      goto end;
     }
-    err = unpad(&block, end >= ciphertext->length);
+    size_t blockLen = blockEnd - blockStart;
+    err = unpad(&plaintext->bytes[blockStart], recordEnd >= ciphertext->length,
+                &blockLen);
     if (err) {
-      goto error;
+      goto end;
     }
-    start = end;
-    offset += block.length;
+    recordStart = recordEnd;
+    blockStart += blockLen;
   }
-  plaintext->length = offset;
-  goto end;
-
-error:
-  ece_buf_free(plaintext);
+  plaintext->length = blockStart;
 
 end:
   EVP_CIPHER_CTX_free(ctx);
@@ -135,24 +132,28 @@ ece_webpush_decrypt(const ece_buf_t* rawRecvPrivKey,
   EC_KEY* recvPrivKey = NULL;
   EC_KEY* senderPubKey = NULL;
 
+  if (!ciphertext->length) {
+    err = ECE_ERROR_ZERO_CIPHERTEXT;
+    goto end;
+  }
+
   recvPrivKey =
     ece_import_private_key(rawRecvPrivKey->bytes, rawRecvPrivKey->length);
   if (!recvPrivKey) {
-    err = ECE_INVALID_RECEIVER_PRIVATE_KEY;
+    err = ECE_INVALID_PRIVATE_KEY;
     goto end;
   }
   senderPubKey =
     ece_import_public_key(rawSenderPubKey->bytes, rawSenderPubKey->length);
   if (!senderPubKey) {
-    err = ECE_INVALID_SENDER_PUBLIC_KEY;
+    err = ECE_INVALID_PUBLIC_KEY;
     goto end;
   }
 
-  uint8_t key[ECE_KEY_LENGTH];
+  uint8_t key[ECE_AES_KEY_LENGTH];
   uint8_t nonce[ECE_NONCE_LENGTH];
   err = deriveKeyAndNonce(ECE_MODE_DECRYPT, recvPrivKey, senderPubKey,
-                          authSecret->bytes, authSecret->length, salt->bytes,
-                          key, nonce);
+                          authSecret->bytes, salt->bytes, key, nonce);
   if (err) {
     goto end;
   }
@@ -167,45 +168,42 @@ end:
 
 // Removes padding from a decrypted "aesgcm" block.
 static int
-ece_aesgcm_unpad(ece_buf_t* block, bool isLastRecord) {
+ece_aesgcm_unpad(uint8_t* block, bool isLastRecord, size_t* blockLen) {
   ECE_UNUSED(isLastRecord);
-  if (block->length < ECE_AESGCM_PAD_SIZE) {
+  if (*blockLen < 2) {
     return ECE_ERROR_DECRYPT_PADDING;
   }
-  uint16_t pad = ece_read_uint16_be(block->bytes);
-  if (pad > block->length) {
+  uint16_t padLen = ece_read_uint16_be(block);
+  if (padLen >= *blockLen) {
     return ECE_ERROR_DECRYPT_PADDING;
   }
   // In "aesgcm", the content is offset by the pad size and padding.
-  size_t offset = ECE_AESGCM_PAD_SIZE + pad;
-  uint8_t* content = &block->bytes[ECE_AESGCM_PAD_SIZE];
-  while (content < &block->bytes[offset]) {
-    if (*content) {
+  size_t offset = padLen + 2;
+  const uint8_t* pad = &block[2];
+  while (pad < &block[offset]) {
+    if (*pad) {
       // All padding bytes must be zero.
       return ECE_ERROR_DECRYPT_PADDING;
     }
-    content++;
+    pad++;
   }
   // Move the unpadded contents to the start of the block.
-  block->length -= offset;
-  memmove(block->bytes, content, block->length);
+  *blockLen -= offset;
+  memmove(block, pad, *blockLen);
   return ECE_OK;
 }
 
 // Removes padding from a decrypted "aes128gcm" block.
 static int
-ece_aes128gcm_unpad(ece_buf_t* block, bool isLastRecord) {
-  if (!block->length) {
-    return ECE_ERROR_ZERO_PLAINTEXT;
-  }
+ece_aes128gcm_unpad(uint8_t* block, bool isLastRecord, size_t* blockLen) {
   // Remove trailing padding.
-  while (block->length > 0) {
-    block->length--;
-    if (!block->bytes[block->length]) {
+  while (*blockLen > 0) {
+    (*blockLen)--;
+    if (!block[*blockLen]) {
       continue;
     }
-    uint8_t recordPad = isLastRecord ? 2 : 1;
-    if (block->bytes[block->length] != recordPad) {
+    uint8_t padDelim = isLastRecord ? 2 : 1;
+    if (block[*blockLen] != padDelim) {
       // Last record needs to start padding with a 2; preceding records need
       // to start padding with a 1.
       return ECE_ERROR_DECRYPT_PADDING;
@@ -227,7 +225,12 @@ ece_aes128gcm_max_plaintext_length(const ece_buf_t* payload) {
   if (err) {
     return 0;
   }
-  return ciphertext.length - ECE_TAG_LENGTH * rs;
+  return ece_aes128gcm_max_plaintext_length_from_ciphertext(rs, &ciphertext);
+}
+
+size_t
+ece_aesgcm_max_plaintext_length(const ece_buf_t* ciphertext) {
+  return ciphertext->length;
 }
 
 int
@@ -245,7 +248,7 @@ ece_aes128gcm_decrypt(const ece_buf_t* ikm, const ece_buf_t* payload,
     goto end;
   }
 
-  uint8_t key[ECE_KEY_LENGTH];
+  uint8_t key[ECE_AES_KEY_LENGTH];
   uint8_t nonce[ECE_NONCE_LENGTH];
   err = ece_aes128gcm_derive_key_and_nonce(salt.bytes, ikm->bytes, ikm->length,
                                            key, nonce);
@@ -274,6 +277,11 @@ ece_webpush_aes128gcm_decrypt(const ece_buf_t* rawRecvPrivKey,
     return err;
   }
 
+  if (plaintext->length <
+      ece_aes128gcm_max_plaintext_length_from_ciphertext(rs, &ciphertext)) {
+    return ECE_ERROR_OUT_OF_MEMORY;
+  }
+
   return ece_webpush_decrypt(rawRecvPrivKey, &rawSenderPubKey, authSecret,
                              &salt, rs, &ciphertext,
                              &ece_webpush_aes128gcm_derive_key_and_nonce,
@@ -295,10 +303,16 @@ ece_webpush_aesgcm_decrypt(const ece_buf_t* rawRecvPrivKey,
 
   uint32_t rs;
   err = ece_webpush_aesgcm_extract_params(cryptoKeyHeader, encryptionHeader,
-                                          &rs, &salt, &rawSenderPubKey);
+                                          &salt, &rs, &rawSenderPubKey);
   if (err) {
     goto end;
   }
+
+  if (plaintext->length < ece_aesgcm_max_plaintext_length(ciphertext)) {
+    err = ECE_ERROR_OUT_OF_MEMORY;
+    goto end;
+  }
+
   rs += ECE_TAG_LENGTH;
   err = ece_webpush_decrypt(
     rawRecvPrivKey, &rawSenderPubKey, authSecret, &salt, rs, ciphertext,
