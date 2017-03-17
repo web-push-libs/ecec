@@ -347,7 +347,7 @@ ece_aes128gcm_extract_params(const ece_buf_t* payload, ece_buf_t* salt,
   ece_buf_slice(payload, 0, ECE_SALT_LENGTH, salt);
 
   *rs = ece_read_uint32_be(&payload->bytes[ECE_SALT_LENGTH]);
-  if (*rs <= ECE_AES128GCM_RECORD_OVERHEAD) {
+  if (*rs < ECE_AES128GCM_MIN_RS) {
     return ECE_ERROR_INVALID_RS;
   }
 
