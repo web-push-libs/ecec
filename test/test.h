@@ -28,10 +28,10 @@ void
 test_aesgcm_valid_ciphertexts();
 
 void
-test_aes128gcm_encrypt();
+test_webpush_aes128gcm_encrypt();
 
 void
-test_aes128gcm_decrypt_valid_payloads();
+test_webpush_aes128gcm_decrypt_valid_payloads();
 
 void
 test_aes128gcm_decrypt_invalid_payloads();

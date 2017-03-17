@@ -4,6 +4,13 @@
 
 typedef struct encrypt_test_s {
   const char* desc;
+  const char* ikm;
+  const char* salt;
+  uint32_t rs;
+} encrypt_test_t;
+
+typedef struct webpush_encrypt_test_s {
+  const char* desc;
   const char* payload;
   const char* senderPrivKey;
   const char* recvPubKey;
@@ -12,15 +19,15 @@ typedef struct encrypt_test_s {
   const char* plaintext;
   uint32_t rs;
   uint8_t pad;
-} encrypt_test_t;
+} webpush_encrypt_test_t;
 
-typedef struct valid_decrypt_test_s {
+typedef struct webpush_valid_decrypt_test_s {
   const char* desc;
   const char* plaintext;
   const char* recvPrivKey;
   const char* authSecret;
   const char* payload;
-} valid_decrypt_test_t;
+} webpush_valid_decrypt_test_t;
 
 typedef struct invalid_decrypt_test_s {
   const char* desc;
@@ -29,7 +36,7 @@ typedef struct invalid_decrypt_test_s {
   int err;
 } invalid_decrypt_test_t;
 
-static encrypt_test_t encrypt_tests[] = {
+static webpush_encrypt_test_t webpush_encrypt_tests[] = {
   {
     .desc = "Example from draft-ietf-webpush-encryption-latest",
     .payload = "DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z9KsN6nGRTbVYI_"
@@ -69,9 +76,52 @@ static encrypt_test_t encrypt_tests[] = {
     .rs = 24,
     .pad = 6,
   },
+  {
+    // This test is also interesting because the data length (54) is a multiple
+    // of rs (18). We'll allocate memory to hold 4 records, but only write 3.
+    .desc = "rs = 18, pad = 31",
+    .payload = "5JiI0rKPJ3-Ee8XelvD4GwAAABJBBAC4M-SBqZqjMNyyd5ItX4SvLpzmEa0q0-"
+               "0PW0MZEtNepy_Fv3a3adlSZ3j1q_oFhlCYjaXlMf-"
+               "C0acEN5THFwY665WL8Ra8z1B0L9TWm9Dqfj9hHHCb8s31zUfGQmy4MjtTmMQ8DQ"
+               "uSzJgtocJM5f7isgP3rXjKRPBJDzQH9f7ogyZu5HA1GV3g_"
+               "m2KdeSH3yVttZenXkWuT7VbglnLCy0Z57BXFCZ-"
+               "tWCuByt6ZllRkXoGhzLfMJviVvkPKt2jLwX-"
+               "ql6bBpW8oszyKq78fanO68XUDBLTKttchMsyCvlEAWCVNi_ruk_"
+               "6SpmDDklY6iu6UIy2g6WNICfUt0cmqFOyS0fMunUavp2astqewrqcfM8M8XMFuu"
+               "MU04podhiwdy_LcdRBkCekv0NctyGq1078F5mBtxaWBL-"
+               "X7KxB5ziERWkzc0gYEykjtWwVLWyeWa75laylneC_LIA6BxgIiWcKCOZKINK_"
+               "qFPgEShylHuqr_"
+               "tRDMnnXWMQ7WqsvS4Lo6Kb5CxlMupOM0bh8FcWRjcccWZeP6yddvruHxIuZNSQ3"
+               "So-MYFuq1g_FyhBoHXSBfMYcUqMcM4PMn9NkrjJ3LgT5tJP6FYz8anHweSh-"
+               "zFN1f4-KA45CPNsjL-4C32SQ6uv-mXCFs8aqLjWJqYw3-"
+               "gYbOl3pbjzZJ03U7kXbDZ-TgfyIKF1gGE46IglovNJhCBYK5Yglli7-"
+               "o8rppM6g8Je2yaRh3llQuKsSbgHhja93CaOEWJei_-"
+               "fCjQ9OkwGCA7wgDuNzY6EHQ4nWeSD6hm5AzJNnsTVL0kazvPu_"
+               "0QcN4gcdZPqwxYhM3pehln5PiAHmw4m6_"
+               "5WwQRV0QlxEwvSosFZx09IsuUmUwp29kzKLvskbnk9Eft1pmgBjnDDEHEA-"
+               "BujsWrkCoOPGNTEfx1xMvF0aI7FOCOU4BGZIXMaFoebhY_zj3KFHqPZ9SY_"
+               "7FpgbRJxqJuEzKU-"
+               "1zxSVOJFv48vJ8LByH857qeMcBfIxrWrAWYwMrWNoxBXKF5WwgP05I1nicZrJpW"
+               "pAOAEgr2EZVns3dQCZLOOJ5ZH0ewPzNwYgYOLvgyDXiaQ7wWLj2oD4pzZ65WE6X"
+               "-8MJdzw2iOXgP5044-"
+               "RUhzil9WnFkUfT6CPMyscdXogl1RNM6YE80Lj5Yno9v6Rbg6Wcg9K0061Dd3ijy"
+               "xvHe6FskjBvQmGiofDVx-2uz5JvktfJ38rodROmi4x-"
+               "98YyZLhYdnwRqqQdJ8Y29S4oVR6TqWnNyW1Dhnt8vWj-"
+               "A1e9M0FfryKq7ryVf0tXN6BKtyd7TtQAjwntr_"
+               "Wm22n2ywbz0LdmiJBrL1OyfmPzcoui7aUF-xsy-B3dxtMF_"
+               "VlJ7dBUkMsWGPDOFDDp9e31ABLcM",
+    .senderPrivKey = "eDBXe6_PxFgo2gxAqrCfsie_6uBoqrjAZCIqy-bv_TQ",
+    .recvPubKey = "BMPXFMtC4rCh1vmFmeLxhrjCum9vq14JoqvKhlwIBYkrLDcpMw74PcnfS0Q2"
+                  "KwOaBgnTa-uTIaQx7BI1Bt3ZDyQ",
+    .authSecret = "5Ne3neze3hLD6dkNPgVzDw",
+    .salt = "5JiI0rKPJ3-Ee8XelvD4Gw",
+    .plaintext = "Push the button, Frank!",
+    .rs = 18,
+    .pad = 31,
+  },
 };
 
-static valid_decrypt_test_t valid_decrypt_tests[] = {
+static webpush_valid_decrypt_test_t webpush_valid_decrypt_tests[] = {
   {
     .desc = "rs = 24",
     .plaintext = "I am the walrus",
@@ -134,10 +184,10 @@ static invalid_decrypt_test_t invalid_decrypt_tests[] = {
 };
 
 void
-test_aes128gcm_encrypt() {
-  size_t tests = sizeof(encrypt_tests) / sizeof(encrypt_test_t);
+test_webpush_aes128gcm_encrypt() {
+  size_t tests = sizeof(webpush_encrypt_tests) / sizeof(webpush_encrypt_test_t);
   for (size_t i = 0; i < tests; i++) {
-    encrypt_test_t t = encrypt_tests[i];
+    webpush_encrypt_test_t t = webpush_encrypt_tests[i];
 
     ece_buf_t rawSenderPrivKey;
     int err =
@@ -203,10 +253,11 @@ test_aes128gcm_encrypt() {
 }
 
 void
-test_aes128gcm_decrypt_valid_payloads() {
-  size_t tests = sizeof(valid_decrypt_tests) / sizeof(valid_decrypt_test_t);
+test_webpush_aes128gcm_decrypt_valid_payloads() {
+  size_t tests =
+    sizeof(webpush_valid_decrypt_tests) / sizeof(webpush_valid_decrypt_test_t);
   for (size_t i = 0; i < tests; i++) {
-    valid_decrypt_test_t t = valid_decrypt_tests[i];
+    webpush_valid_decrypt_test_t t = webpush_valid_decrypt_tests[i];
 
     ece_buf_t rawRecvPrivKey;
     int err =

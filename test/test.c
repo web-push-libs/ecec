@@ -10,8 +10,8 @@ main() {
   test_aesgcm_invalid_crypto_params();
   test_aesgcm_valid_ciphertexts();
 
-  test_aes128gcm_encrypt();
-  test_aes128gcm_decrypt_valid_payloads();
+  test_webpush_aes128gcm_encrypt();
+  test_webpush_aes128gcm_decrypt_valid_payloads();
   test_aes128gcm_decrypt_invalid_payloads();
 
   test_base64url_decode();

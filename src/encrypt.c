@@ -68,17 +68,16 @@ ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
 
   // Make sure the payload buffer is large enough to hold the header and
   // ciphertext.
-  size_t payloadLen = ece_aes128gcm_max_payload_length(rs, padLen, plaintext);
-  if (!payloadLen) {
+  size_t maxPayloadLen =
+    ece_aes128gcm_max_payload_length(rs, padLen, plaintext);
+  if (!maxPayloadLen) {
     err = ECE_ERROR_ENCRYPT;
     goto end;
   }
-  payloadLen -= ECE_AES128GCM_MAX_KEY_ID_LENGTH - ECE_WEBPUSH_PUBLIC_KEY_LENGTH;
-  if (payload->length < payloadLen) {
+  if (payload->length < maxPayloadLen) {
     err = ECE_ERROR_OUT_OF_MEMORY;
     goto end;
   }
-  payload->length = payloadLen;
 
   ctx = EVP_CIPHER_CTX_new();
   if (!ctx) {
@@ -118,18 +117,24 @@ ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
   }
 
   ece_buf_t ciphertext;
-  ece_buf_slice(payload, header.length, payloadLen, &ciphertext);
+  ece_buf_slice(payload, header.length, payload->length, &ciphertext);
 
   bool isLastRecord = false;
-  size_t plaintextPerBlock = rs - ECE_AES128GCM_MIN_RS + 1;
+  size_t overhead = ECE_AES128GCM_MIN_RS - 1;
+  size_t plaintextPerBlock = rs - overhead;
   size_t blockStart = 0;
   size_t recordStart = 0;
   size_t counter = 0;
   while (!isLastRecord) {
-    // Pad so that at least one data byte is in a block.
+    // Pad so that at least one plaintext byte is in a block.
     size_t blockPadLen = plaintextPerBlock - 1;
     if (blockPadLen > padLen) {
       blockPadLen = padLen;
+    }
+    if (padLen && !blockPadLen) {
+      // If our record size is `ECE_AES128GCM_MIN_RS + 1`, we can only include
+      // one byte of data, so write the padding first.
+      blockPadLen++;
     }
     padLen -= blockPadLen;
 
@@ -142,10 +147,11 @@ ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
         isLastRecord = true;
       }
     }
+    size_t blockLen = blockEnd - blockStart;
 
     pad[0] = isLastRecord ? 2 : 1;
 
-    size_t recordEnd = recordStart + rs;
+    size_t recordEnd = recordStart + blockLen + blockPadLen + overhead;
     if (recordEnd >= ciphertext.length) {
       recordEnd = ciphertext.length;
     }
@@ -166,10 +172,7 @@ ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
     recordStart = recordEnd;
     counter++;
   }
-  if (padLen) {
-    err = ECE_ERROR_ENCRYPT_PADDING;
-    goto end;
-  }
+  payload->length = header.length + recordStart;
 
 end:
   EVP_CIPHER_CTX_free(ctx);
@@ -184,17 +187,17 @@ ece_aes128gcm_max_payload_length(uint32_t rs, size_t padLen,
     return 0;
   }
   // The per-record overhead for the padding delimiter and authentication tag.
-  size_t overheadLen = ECE_AES128GCM_MIN_RS - 1;
+  size_t overhead = ECE_AES128GCM_MIN_RS - 1;
   // The total length of the data to encrypt, including the plaintext and
   // padding.
   size_t dataLen = plaintext->length + padLen;
   // The maximum length of data to include in each record, excluding the
   // padding delimiter and authentication tag.
-  size_t dataPerBlock = rs - overheadLen;
+  size_t dataPerBlock = rs - overhead;
   // The total number of encrypted records.
   size_t numRecords = (dataLen / dataPerBlock) + 1;
   return ECE_AES128GCM_HEADER_LENGTH + ECE_AES128GCM_MAX_KEY_ID_LENGTH +
-         dataLen + (overheadLen * numRecords);
+         dataLen + (overhead * numRecords);
 }
 
 int
