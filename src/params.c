@@ -37,6 +37,7 @@ ece_read_uint32_be(const uint8_t* bytes) {
 // allocate three `ece_header_pairs_t` structures, one for each ;-delimited
 // pair. "=" separates the name and value.
 typedef struct ece_header_pairs_s {
+  struct ece_header_pairs_s* next;
   // The name and value are pointers into the backing header value; the parser
   // doesn't allocate new strings. Freeing the backing string will invalidate
   // all `name` and `value` references. Also, because these are not true C
@@ -44,10 +45,9 @@ typedef struct ece_header_pairs_s {
   // `strncmp`. Functions that assume a NUL-terminated string will read until
   // the end of the backing string.
   const char* name;
-  size_t nameLen;
   const char* value;
+  size_t nameLen;
   size_t valueLen;
-  struct ece_header_pairs_s* next;
 } ece_header_pairs_t;
 
 // Initializes a name-value pair node at the head of the pair list. `head` may
@@ -59,11 +59,11 @@ ece_header_pairs_alloc(ece_header_pairs_t* head) {
   if (!pairs) {
     return NULL;
   }
-  pairs->name = NULL;
-  pairs->nameLen = 0;
-  pairs->value = NULL;
-  pairs->valueLen = 0;
   pairs->next = head;
+  pairs->name = NULL;
+  pairs->value = NULL;
+  pairs->nameLen = 0;
+  pairs->valueLen = 0;
   return pairs;
 }
 
@@ -104,8 +104,8 @@ ece_header_pairs_free(ece_header_pairs_t* pairs) {
 // allocate two `ece_header_params_t` structures: one to hold the parameter
 // `a=b; c=d`, and the other to hold `e=f; g=h`.
 typedef struct ece_header_params_s {
-  ece_header_pairs_t* pairs;
   struct ece_header_params_s* next;
+  ece_header_pairs_t* pairs;
 } ece_header_params_t;
 
 // Initializes a parameter node at the head of the parameter list. `head` may be
@@ -117,8 +117,8 @@ ece_header_params_alloc(ece_header_params_t* head) {
   if (!params) {
     return NULL;
   }
-  params->pairs = NULL;
   params->next = head;
+  params->pairs = NULL;
   return params;
 }
 
@@ -351,7 +351,7 @@ ece_aes128gcm_extract_params(const ece_buf_t* payload, ece_buf_t* salt,
     return ECE_ERROR_INVALID_RS;
   }
 
-  uint8_t keyIdLen = payload->bytes[ECE_SALT_LENGTH + 4];
+  size_t keyIdLen = payload->bytes[ECE_SALT_LENGTH + 4];
   if (payload->length < ECE_AES128GCM_HEADER_LENGTH + keyIdLen) {
     return ECE_ERROR_SHORT_HEADER;
   }

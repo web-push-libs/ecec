@@ -337,6 +337,8 @@ ece_webpush_aesgcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* recvPrivKey,
                                         const uint8_t* authSecret,
                                         const uint8_t* salt, uint8_t* key,
                                         uint8_t* nonce) {
+  ECE_UNUSED(mode);
+
   int err = ECE_OK;
 
   uint8_t* sharedSecret = NULL;
