@@ -297,9 +297,7 @@ ece_webpush_aesgcm_decrypt(const ece_buf_t* rawRecvPrivKey,
   int err = ECE_OK;
 
   ece_buf_t rawSenderPubKey;
-  ece_buf_reset(&rawSenderPubKey);
   ece_buf_t salt;
-  ece_buf_reset(&salt);
 
   uint32_t rs;
   err = ece_webpush_aesgcm_extract_params(cryptoKeyHeader, encryptionHeader,

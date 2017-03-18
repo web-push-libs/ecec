@@ -415,16 +415,29 @@ ece_webpush_aesgcm_extract_params(const char* cryptoKeyHeader,
       continue;
     }
     if (ece_header_pairs_has_name(pair, "salt")) {
-      // The salt is required, and must be Base64url-encoded without padding.
-      if (ece_base64url_decode(pair->value, pair->valueLen,
-                               ECE_BASE64URL_REJECT_PADDING, salt)) {
+      size_t minSaltLen = ece_base64url_decode(
+        pair->value, pair->valueLen, ECE_BASE64URL_REJECT_PADDING, NULL, 0);
+      if (!minSaltLen) {
         err = ECE_ERROR_INVALID_SALT;
         goto error;
       }
+      if (!ece_buf_alloc(salt, minSaltLen)) {
+        err = ECE_ERROR_OUT_OF_MEMORY;
+        goto error;
+      }
+      // The salt is required, and must be Base64url-encoded without padding.
+      size_t saltLen = ece_base64url_decode(pair->value, pair->valueLen,
+                                            ECE_BASE64URL_REJECT_PADDING,
+                                            salt->bytes, minSaltLen);
+      if (!saltLen) {
+        err = ECE_ERROR_INVALID_SALT;
+        goto error;
+      }
+      salt->length = saltLen;
       continue;
     }
   }
-  if (!salt) {
+  if (!salt->length) {
     err = ECE_ERROR_INVALID_SALT;
     goto error;
   }
@@ -469,14 +482,27 @@ ece_webpush_aesgcm_extract_params(const char* cryptoKeyHeader,
       continue;
     }
     // The sender's public key must be Base64url-encoded without padding.
-    if (ece_base64url_decode(pair->value, pair->valueLen,
-                             ECE_BASE64URL_REJECT_PADDING, rawSenderPubKey)) {
+    size_t minKeyLen = ece_base64url_decode(
+      pair->value, pair->valueLen, ECE_BASE64URL_REJECT_PADDING, NULL, 0);
+    if (!minKeyLen) {
       err = ECE_ERROR_INVALID_DH;
       goto error;
     }
+    if (!ece_buf_alloc(rawSenderPubKey, minKeyLen)) {
+      err = ECE_ERROR_OUT_OF_MEMORY;
+      goto error;
+    }
+    size_t keyLen = ece_base64url_decode(pair->value, pair->valueLen,
+                                         ECE_BASE64URL_REJECT_PADDING,
+                                         rawSenderPubKey->bytes, minKeyLen);
+    if (!keyLen) {
+      err = ECE_ERROR_INVALID_DH;
+      goto error;
+    }
+    rawSenderPubKey->length = keyLen;
     break;
   }
-  if (!rawSenderPubKey) {
+  if (!rawSenderPubKey->length) {
     err = ECE_ERROR_INVALID_DH;
     goto error;
   }

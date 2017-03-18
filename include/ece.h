@@ -188,10 +188,15 @@ ece_buf_slice(const ece_buf_t* buf, size_t start, size_t end, ece_buf_t* slice);
 void
 ece_buf_free(ece_buf_t* buf);
 
-// Decodes a Base64url-encoded (RFC 4648) string into `binary`.
-int
+// Decodes a Base64url-encoded (RFC 4648) string. If `decoded` is `NULL` and
+// `decodedLen` is 0, returns the minimum size of the buffer required to hold
+// the decoded output. If `base64Len` is 0, `base64` contains invalid
+// characters, or `decodedLen` is not large enough to hold the output, returns
+// 0. Otherwise, returns the actual decoded size.
+size_t
 ece_base64url_decode(const char* base64, size_t base64Len,
-                     ece_base64url_decode_policy_t policy, ece_buf_t* binary);
+                     ece_base64url_decode_policy_t paddingPolicy,
+                     uint8_t* decoded, size_t decodedLen);
 
 #ifdef __cplusplus
 }
