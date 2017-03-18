@@ -81,7 +81,10 @@ ece_header_pairs_has_value(ece_header_pairs_t* pair, const char* value) {
 // Copies a pair node's value into a C string.
 static char*
 ece_header_pairs_value_to_str(ece_header_pairs_t* pair) {
-  char* value = (char*) malloc(pair->valueLen + 1);
+  char* value = malloc(pair->valueLen + 1);
+  if (!value) {
+    return NULL;
+  }
   strncpy(value, pair->value, pair->valueLen);
   value[pair->valueLen] = '\0';
   return value;
