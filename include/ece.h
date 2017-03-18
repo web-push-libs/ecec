@@ -9,6 +9,7 @@ extern "C" {
 #include <stdint.h>
 
 #define ECE_SALT_LENGTH 16
+#define ECE_WEBPUSH_PUBLIC_KEY_LENGTH 65
 #define ECE_WEBPUSH_AUTH_SECRET_LENGTH 16
 
 #define ECE_AES128GCM_MIN_RS 18
@@ -155,16 +156,15 @@ ece_aes128gcm_extract_params(const ece_buf_t* payload, ece_buf_t* salt,
                              ece_buf_t* ciphertext);
 
 // Extracts the ephemeral public key, salt, and record size from the sender's
-// `Crypto-Key` and `Encryption` headers. The caller takes ownership of `salt`
-// and `rawSenderPubKey` if parsing succeeds.
+// `Crypto-Key` and `Encryption` headers. Returns an error if the header values
+// are missing or invalid, or if `saltLen` or `rawSenderPubKeyLen` are not
+// large enough to hold the Base64url-decoded `salt` and `dh` pair values.
 int
-ece_webpush_aesgcm_extract_params(
-  // The sender's `Crypto-Key` header, containing the ephemeral public key.
-  const char* cryptoKeyHeader,
-  // The sender's `Encryption` header, containing the salt and record size.
-  const char* encryptionHeader,
-  // The salt. Must be `ECE_KEY_LENGTH`
-  ece_buf_t* salt, uint32_t* rs, ece_buf_t* rawSenderPubKey);
+ece_webpush_aesgcm_extract_params(const char* cryptoKeyHeader,
+                                  const char* encryptionHeader, uint8_t* salt,
+                                  size_t saltLen, uint32_t* rs,
+                                  uint8_t* rawSenderPubKey,
+                                  size_t rawSenderPubKeyLen);
 
 // Initializes a non-zero-filled buffer with the requested length.
 bool

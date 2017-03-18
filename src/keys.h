@@ -12,7 +12,6 @@ extern "C" {
 #define ECE_NONCE_LENGTH 12
 #define ECE_TAG_LENGTH 16
 
-#define ECE_WEBPUSH_PUBLIC_KEY_LENGTH 65
 #define ECE_WEBPUSH_IKM_LENGTH 32
 
 // HKDF info strings for the "aes128gcm" scheme. Note that the lengths include

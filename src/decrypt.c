@@ -30,7 +30,7 @@ ece_read_uint16_be(const uint8_t* bytes) {
 // Converts an encrypted record to a decrypted block.
 static int
 ece_decrypt_record(EVP_CIPHER_CTX* ctx, const uint8_t* key, const uint8_t* iv,
-                   uint8_t* record, size_t recordLen, uint8_t* block) {
+                   const uint8_t* record, size_t recordLen, uint8_t* block) {
   int err = ECE_OK;
 
   if (EVP_DecryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key, iv) <= 0) {
@@ -38,8 +38,10 @@ ece_decrypt_record(EVP_CIPHER_CTX* ctx, const uint8_t* key, const uint8_t* iv,
     goto end;
   }
   // The authentication tag is included at the end of the encrypted record.
-  if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, ECE_TAG_LENGTH,
-                          &record[recordLen - ECE_TAG_LENGTH]) <= 0) {
+  uint8_t tag[ECE_TAG_LENGTH];
+  memcpy(tag, &record[recordLen - ECE_TAG_LENGTH], ECE_TAG_LENGTH);
+  if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, ECE_TAG_LENGTH, tag) <=
+      0) {
     err = ECE_ERROR_DECRYPT;
     goto end;
   }
@@ -62,8 +64,8 @@ end:
 
 static int
 ece_decrypt_records(const uint8_t* key, const uint8_t* nonce, uint32_t rs,
-                    const ece_buf_t* ciphertext, unpad_t unpad,
-                    ece_buf_t* plaintext) {
+                    const uint8_t* ciphertext, size_t ciphertextLen,
+                    unpad_t unpad, uint8_t* plaintext, size_t* plaintextLen) {
   int err = ECE_OK;
 
   EVP_CIPHER_CTX* ctx = NULL;
@@ -76,10 +78,10 @@ ece_decrypt_records(const uint8_t* key, const uint8_t* nonce, uint32_t rs,
 
   size_t recordStart = 0;
   size_t blockStart = 0;
-  for (size_t counter = 0; recordStart < ciphertext->length; counter++) {
+  for (size_t counter = 0; recordStart < ciphertextLen; counter++) {
     size_t recordEnd = recordStart + rs;
-    if (recordEnd > ciphertext->length) {
-      recordEnd = ciphertext->length;
+    if (recordEnd > ciphertextLen) {
+      recordEnd = ciphertextLen;
     }
     size_t recordLen = recordEnd - recordStart;
     if (recordLen <= ECE_TAG_LENGTH) {
@@ -88,29 +90,28 @@ ece_decrypt_records(const uint8_t* key, const uint8_t* nonce, uint32_t rs,
     }
 
     size_t blockEnd = blockStart + recordLen - ECE_TAG_LENGTH;
-    if (blockEnd > plaintext->length) {
-      blockEnd = plaintext->length;
+    if (blockEnd > *plaintextLen) {
+      blockEnd = *plaintextLen;
     }
 
     // Generate the IV for this record using the nonce.
     uint8_t iv[ECE_NONCE_LENGTH];
     ece_generate_iv(nonce, counter, iv);
 
-    err = ece_decrypt_record(ctx, key, iv, &ciphertext->bytes[recordStart],
-                             recordLen, &plaintext->bytes[blockStart]);
+    err = ece_decrypt_record(ctx, key, iv, &ciphertext[recordStart], recordLen,
+                             &plaintext[blockStart]);
     if (err) {
       goto end;
     }
     size_t blockLen = blockEnd - blockStart;
-    err = unpad(&plaintext->bytes[blockStart], recordEnd >= ciphertext->length,
-                &blockLen);
+    err = unpad(&plaintext[blockStart], recordEnd >= ciphertextLen, &blockLen);
     if (err) {
       goto end;
     }
     recordStart = recordEnd;
     blockStart += blockLen;
   }
-  plaintext->length = blockStart;
+  *plaintextLen = blockStart;
 
 end:
   EVP_CIPHER_CTX_free(ctx);
@@ -121,30 +122,37 @@ end:
 // `deriveKeyAndNonce` and `unpad` are function pointers that change based on
 // the scheme.
 static int
-ece_webpush_decrypt(const ece_buf_t* rawRecvPrivKey,
-                    const ece_buf_t* rawSenderPubKey,
-                    const ece_buf_t* authSecret, const ece_buf_t* salt,
-                    uint32_t rs, const ece_buf_t* ciphertext,
+ece_webpush_decrypt(const uint8_t* rawRecvPrivKey, size_t rawRecvPrivKeyLen,
+                    const uint8_t* rawSenderPubKey, size_t rawSenderPubKeyLen,
+                    const uint8_t* authSecret, size_t authSecretLen,
+                    const uint8_t* salt, size_t saltLen, uint32_t rs,
+                    const uint8_t* ciphertext, size_t ciphertextLen,
                     derive_key_and_nonce_t deriveKeyAndNonce, unpad_t unpad,
-                    ece_buf_t* plaintext) {
+                    uint8_t* plaintext, size_t* plaintextLen) {
   int err = ECE_OK;
 
   EC_KEY* recvPrivKey = NULL;
   EC_KEY* senderPubKey = NULL;
 
-  if (!ciphertext->length) {
+  if (authSecretLen != ECE_WEBPUSH_AUTH_SECRET_LENGTH) {
+    err = ECE_ERROR_DECRYPT;
+    goto end;
+  }
+  if (saltLen != ECE_SALT_LENGTH) {
+    err = ECE_ERROR_INVALID_SALT;
+    goto end;
+  }
+  if (!ciphertextLen) {
     err = ECE_ERROR_ZERO_CIPHERTEXT;
     goto end;
   }
 
-  recvPrivKey =
-    ece_import_private_key(rawRecvPrivKey->bytes, rawRecvPrivKey->length);
+  recvPrivKey = ece_import_private_key(rawRecvPrivKey, rawRecvPrivKeyLen);
   if (!recvPrivKey) {
     err = ECE_INVALID_PRIVATE_KEY;
     goto end;
   }
-  senderPubKey =
-    ece_import_public_key(rawSenderPubKey->bytes, rawSenderPubKey->length);
+  senderPubKey = ece_import_public_key(rawSenderPubKey, rawSenderPubKeyLen);
   if (!senderPubKey) {
     err = ECE_INVALID_PUBLIC_KEY;
     goto end;
@@ -153,12 +161,13 @@ ece_webpush_decrypt(const ece_buf_t* rawRecvPrivKey,
   uint8_t key[ECE_AES_KEY_LENGTH];
   uint8_t nonce[ECE_NONCE_LENGTH];
   err = deriveKeyAndNonce(ECE_MODE_DECRYPT, recvPrivKey, senderPubKey,
-                          authSecret->bytes, salt->bytes, key, nonce);
+                          authSecret, salt, key, nonce);
   if (err) {
     goto end;
   }
 
-  err = ece_decrypt_records(key, nonce, rs, ciphertext, unpad, plaintext);
+  err = ece_decrypt_records(key, nonce, rs, ciphertext, ciphertextLen, unpad,
+                            plaintext, plaintextLen);
 
 end:
   EC_KEY_free(recvPrivKey);
@@ -256,8 +265,9 @@ ece_aes128gcm_decrypt(const ece_buf_t* ikm, const ece_buf_t* payload,
     goto end;
   }
 
-  err = ece_decrypt_records(key, nonce, rs, &ciphertext, &ece_aes128gcm_unpad,
-                            plaintext);
+  err = ece_decrypt_records(key, nonce, rs, ciphertext.bytes, ciphertext.length,
+                            &ece_aes128gcm_unpad, plaintext->bytes,
+                            &plaintext->length);
 
 end:
   return err;
@@ -282,10 +292,12 @@ ece_webpush_aes128gcm_decrypt(const ece_buf_t* rawRecvPrivKey,
     return ECE_ERROR_OUT_OF_MEMORY;
   }
 
-  return ece_webpush_decrypt(rawRecvPrivKey, &rawSenderPubKey, authSecret,
-                             &salt, rs, &ciphertext,
-                             &ece_webpush_aes128gcm_derive_key_and_nonce,
-                             &ece_aes128gcm_unpad, plaintext);
+  return ece_webpush_decrypt(
+    rawRecvPrivKey->bytes, rawRecvPrivKey->length, rawSenderPubKey.bytes,
+    rawSenderPubKey.length, authSecret->bytes, authSecret->length, salt.bytes,
+    salt.length, rs, ciphertext.bytes, ciphertext.length,
+    &ece_webpush_aes128gcm_derive_key_and_nonce, &ece_aes128gcm_unpad,
+    plaintext->bytes, &plaintext->length);
 }
 
 int
@@ -294,30 +306,26 @@ ece_webpush_aesgcm_decrypt(const ece_buf_t* rawRecvPrivKey,
                            const char* cryptoKeyHeader,
                            const char* encryptionHeader,
                            const ece_buf_t* ciphertext, ece_buf_t* plaintext) {
-  int err = ECE_OK;
-
-  ece_buf_t rawSenderPubKey;
-  ece_buf_t salt;
-
+  uint8_t salt[ECE_SALT_LENGTH];
   uint32_t rs;
-  err = ece_webpush_aesgcm_extract_params(cryptoKeyHeader, encryptionHeader,
-                                          &salt, &rs, &rawSenderPubKey);
+  uint8_t rawSenderPubKey[ECE_WEBPUSH_PUBLIC_KEY_LENGTH];
+  int err = ece_webpush_aesgcm_extract_params(
+    cryptoKeyHeader, encryptionHeader, salt, ECE_SALT_LENGTH, &rs,
+    rawSenderPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH);
   if (err) {
-    goto end;
+    return err;
   }
 
   if (plaintext->length < ece_aesgcm_max_plaintext_length(ciphertext)) {
-    err = ECE_ERROR_OUT_OF_MEMORY;
-    goto end;
+    return ECE_ERROR_OUT_OF_MEMORY;
   }
 
   rs += ECE_TAG_LENGTH;
   err = ece_webpush_decrypt(
-    rawRecvPrivKey, &rawSenderPubKey, authSecret, &salt, rs, ciphertext,
-    &ece_webpush_aesgcm_derive_key_and_nonce, &ece_aesgcm_unpad, plaintext);
-
-end:
-  ece_buf_free(&rawSenderPubKey);
-  ece_buf_free(&salt);
+    rawRecvPrivKey->bytes, rawRecvPrivKey->length, rawSenderPubKey,
+    ECE_WEBPUSH_PUBLIC_KEY_LENGTH, authSecret->bytes, authSecret->length, salt,
+    ECE_SALT_LENGTH, rs, ciphertext->bytes, ciphertext->length,
+    &ece_webpush_aesgcm_derive_key_and_nonce, &ece_aesgcm_unpad,
+    plaintext->bytes, &plaintext->length);
   return err;
 }
