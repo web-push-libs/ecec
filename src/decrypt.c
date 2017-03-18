@@ -257,6 +257,11 @@ ece_aes128gcm_decrypt(const ece_buf_t* ikm, const ece_buf_t* payload,
     goto end;
   }
 
+  if (plaintext->length <
+      ece_aes128gcm_max_plaintext_length_from_ciphertext(rs, &ciphertext)) {
+    return ECE_ERROR_OUT_OF_MEMORY;
+  }
+
   uint8_t key[ECE_AES_KEY_LENGTH];
   uint8_t nonce[ECE_NONCE_LENGTH];
   err = ece_aes128gcm_derive_key_and_nonce(salt.bytes, ikm->bytes, ikm->length,
