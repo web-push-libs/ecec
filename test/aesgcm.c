@@ -335,12 +335,9 @@ test_aesgcm_valid_ciphertexts() {
     valid_ciphertext_test_t t = valid_ciphertext_tests[i];
 
     ece_buf_t rawRecvPrivKeyBuf;
-    size_t base64Len = strlen(t.recvPrivKey);
-    uint8_t* rawRecvPrivKey = calloc(32, sizeof(uint8_t));
-    ece_assert(rawRecvPrivKey, "Want receiver private key buffer for `%s`",
-               t.desc);
+    uint8_t rawRecvPrivKey[32];
     size_t decodedLen =
-      ece_base64url_decode(t.recvPrivKey, base64Len,
+      ece_base64url_decode(t.recvPrivKey, strlen(t.recvPrivKey),
                            ECE_BASE64URL_REJECT_PADDING, rawRecvPrivKey, 32);
     ece_assert(decodedLen, "Want decoded receiver private key for `%s`",
                t.desc);
@@ -348,27 +345,25 @@ test_aesgcm_valid_ciphertexts() {
     rawRecvPrivKeyBuf.length = 32;
 
     ece_buf_t authSecretBuf;
-    base64Len = strlen(t.authSecret);
-    uint8_t* authSecret = calloc(16, sizeof(uint8_t));
-    ece_assert(authSecret, "Want auth secret buffer for `%s`", t.desc);
-    decodedLen = ece_base64url_decode(
-      t.authSecret, base64Len, ECE_BASE64URL_REJECT_PADDING, authSecret, 16);
+    uint8_t authSecret[16];
+    decodedLen =
+      ece_base64url_decode(t.authSecret, strlen(t.authSecret),
+                           ECE_BASE64URL_REJECT_PADDING, authSecret, 16);
     ece_assert(decodedLen, "Want decoded auth secret length for `%s`", t.desc);
     authSecretBuf.bytes = authSecret;
     authSecretBuf.length = 16;
 
     ece_buf_t ciphertextBuf;
-    base64Len = strlen(t.ciphertext);
-    size_t minDecodedLen = ece_base64url_decode(
-      t.ciphertext, base64Len, ECE_BASE64URL_REJECT_PADDING, NULL, 0);
-    ece_assert(minDecodedLen, "Want minimum decoded ciphertext length for `%s`",
-               t.desc);
-    uint8_t* ciphertext = calloc(minDecodedLen, sizeof(uint8_t));
+    size_t ciphertextBase64Len = strlen(t.ciphertext);
+    decodedLen = ece_base64url_decode(t.ciphertext, ciphertextBase64Len,
+                                      ECE_BASE64URL_REJECT_PADDING, NULL, 0);
+    ece_assert(decodedLen, "Want decoded ciphertext length for `%s`", t.desc);
+    uint8_t* ciphertext = calloc(decodedLen, sizeof(uint8_t));
     ece_assert(ciphertext, "Want ciphertext buffer length %zu for `%s`",
-               minDecodedLen, t.desc);
-    decodedLen = ece_base64url_decode(t.ciphertext, base64Len,
+               decodedLen, t.desc);
+    decodedLen = ece_base64url_decode(t.ciphertext, ciphertextBase64Len,
                                       ECE_BASE64URL_REJECT_PADDING, ciphertext,
-                                      minDecodedLen);
+                                      decodedLen);
     ece_assert(decodedLen, "Want decoded ciphertext for `%s`", t.desc);
     ciphertextBuf.bytes = ciphertext;
     ciphertextBuf.length = decodedLen;
@@ -396,8 +391,6 @@ test_aesgcm_valid_ciphertexts() {
     ece_assert(!memcmp(plaintext, t.plaintext, plaintextLen),
                "Wrong plaintext for `%s`", t.desc);
 
-    free(rawRecvPrivKey);
-    free(authSecret);
     free(ciphertext);
     free(plaintext);
   }
