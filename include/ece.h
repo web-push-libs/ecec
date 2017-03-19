@@ -41,12 +41,6 @@ extern "C" {
 // Annotates a variable or parameter as unused to avoid compiler warnings.
 #define ECE_UNUSED(x) (void) (x)
 
-// A buffer data type, inspired by libuv's `uv_buf_t`.
-typedef struct ece_buf_s {
-  uint8_t* bytes;
-  size_t length;
-} ece_buf_t;
-
 // The policy for handling trailing "=" characters in Base64url-encoded input.
 typedef enum ece_base64url_decode_policy_e {
   // Fails decoding if the input is unpadded. RFC 4648, section 3.2 requires
@@ -149,28 +143,6 @@ ece_webpush_aesgcm_headers_decode(const char* cryptoKeyHeader,
                                   const char* encryptionHeader, uint8_t* salt,
                                   size_t saltLen, uint8_t* rawSenderPubKey,
                                   size_t rawSenderPubKeyLen, uint32_t* rs);
-
-// Initializes a non-zero-filled buffer with the requested length.
-bool
-ece_buf_alloc(ece_buf_t* buf, size_t len);
-
-// Initializes a zero-filled buffer with the requested length.
-bool
-ece_buf_calloc(ece_buf_t* buf, size_t len);
-
-// Resets a buffer's byte array and length to zero. This does not automatically
-// free the backing array if one was set before.
-void
-ece_buf_reset(ece_buf_t* buf);
-
-// Creates and returns a slice of an existing buffer. Freeing the backing memory
-// will invalidate all its slices.
-void
-ece_buf_slice(const ece_buf_t* buf, size_t start, size_t end, ece_buf_t* slice);
-
-// Frees a buffer's backing memory and resets its length.
-void
-ece_buf_free(ece_buf_t* buf);
 
 // Decodes a Base64url-encoded (RFC 4648) string. If `decoded` is `NULL` and
 // `decodedLen` is 0, returns the minimum size of the buffer required to hold

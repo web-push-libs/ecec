@@ -14,7 +14,6 @@ enable_testing()
 
 set(ECE_SOURCES
   src/base64url.c
-  src/buffer.c
   src/encrypt.c
   src/decrypt.c
   src/keys.c
