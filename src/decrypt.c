@@ -147,7 +147,7 @@ ece_webpush_decrypt(const uint8_t* rawRecvPrivKey, size_t rawRecvPrivKeyLen,
   EC_KEY* senderPubKey = NULL;
 
   if (authSecretLen != ECE_WEBPUSH_AUTH_SECRET_LENGTH) {
-    err = ECE_ERROR_DECRYPT;
+    err = ECE_ERROR_INVALID_AUTH_SECRET;
     goto end;
   }
   if (saltLen != ECE_SALT_LENGTH) {
@@ -161,12 +161,12 @@ ece_webpush_decrypt(const uint8_t* rawRecvPrivKey, size_t rawRecvPrivKeyLen,
 
   recvPrivKey = ece_import_private_key(rawRecvPrivKey, rawRecvPrivKeyLen);
   if (!recvPrivKey) {
-    err = ECE_INVALID_PRIVATE_KEY;
+    err = ECE_ERROR_INVALID_PRIVATE_KEY;
     goto end;
   }
   senderPubKey = ece_import_public_key(rawSenderPubKey, rawSenderPubKeyLen);
   if (!senderPubKey) {
-    err = ECE_INVALID_PUBLIC_KEY;
+    err = ECE_ERROR_INVALID_PUBLIC_KEY;
     goto end;
   }
 

@@ -69,11 +69,15 @@ ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
   uint8_t* pad = NULL;
 
   if (authSecretLen != ECE_WEBPUSH_AUTH_SECRET_LENGTH) {
-    err = ECE_ERROR_ENCRYPT;
+    err = ECE_ERROR_INVALID_AUTH_SECRET;
     goto end;
   }
   if (saltLen != ECE_SALT_LENGTH) {
-    err = ECE_ERROR_ENCRYPT;
+    err = ECE_ERROR_INVALID_SALT;
+    goto end;
+  }
+  if (!plaintextLen) {
+    err = ECE_ERROR_ZERO_PLAINTEXT;
     goto end;
   }
 
@@ -82,7 +86,7 @@ ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
   size_t maxRecordEnd =
     ece_aes128gcm_payload_max_length(rs, padLen, plaintextLen);
   if (!maxRecordEnd) {
-    err = ECE_ERROR_ENCRYPT;
+    err = ECE_ERROR_INVALID_RS;
     goto end;
   }
   if (*payloadLen < maxRecordEnd) {
@@ -120,7 +124,7 @@ ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
         EC_KEY_get0_group(senderPrivKey), EC_KEY_get0_public_key(senderPrivKey),
         POINT_CONVERSION_UNCOMPRESSED, &payload[ECE_AES128GCM_HEADER_LENGTH],
         ECE_WEBPUSH_PUBLIC_KEY_LENGTH, NULL)) {
-    err = ECE_ERROR_ENCRYPT;
+    err = ECE_ERROR_ENCODE_PUBLIC_KEY;
     goto end;
   }
 
@@ -220,14 +224,14 @@ ece_aes128gcm_encrypt(const uint8_t* rawRecvPubKey, size_t rawRecvPubKeyLen,
   // Generate a random salt.
   uint8_t salt[ECE_SALT_LENGTH];
   if (RAND_bytes(salt, ECE_SALT_LENGTH) <= 0) {
-    err = ECE_ERROR_ENCRYPT;
+    err = ECE_ERROR_INVALID_SALT;
     goto end;
   }
 
   // Import the receiver public key.
   recvPubKey = ece_import_public_key(rawRecvPubKey, rawRecvPubKeyLen);
   if (!recvPubKey) {
-    err = ECE_ERROR_ENCRYPT;
+    err = ECE_ERROR_INVALID_PUBLIC_KEY;
     goto end;
   }
 
@@ -238,7 +242,7 @@ ece_aes128gcm_encrypt(const uint8_t* rawRecvPubKey, size_t rawRecvPubKeyLen,
     goto end;
   }
   if (EC_KEY_generate_key(senderPrivKey) <= 0) {
-    err = ECE_ERROR_ENCRYPT;
+    err = ECE_ERROR_INVALID_PRIVATE_KEY;
     goto end;
   }
 
@@ -267,12 +271,12 @@ ece_aes128gcm_encrypt_with_keys(
 
   senderPrivKey = ece_import_private_key(rawSenderPrivKey, rawSenderPrivKeyLen);
   if (!senderPrivKey) {
-    err = ECE_ERROR_ENCRYPT;
+    err = ECE_ERROR_INVALID_PRIVATE_KEY;
     goto end;
   }
   recvPubKey = ece_import_public_key(rawRecvPubKey, rawRecvPubKeyLen);
   if (!recvPubKey) {
-    err = ECE_ERROR_ENCRYPT;
+    err = ECE_ERROR_INVALID_PUBLIC_KEY;
     goto end;
   }
 
