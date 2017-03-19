@@ -65,7 +65,7 @@ typedef enum ece_mode_e {
 // padding. The caller should allocate and pass a buffer of this size as the
 // `payload` argument to the "aes128gcm" decryption functions.
 size_t
-ece_aes128gcm_max_plaintext_length(const uint8_t* payload, size_t payloadLen);
+ece_aes128gcm_plaintext_max_length(const uint8_t* payload, size_t payloadLen);
 
 // Decrypts a message encrypted with the "aes128gcm" scheme. `ikm` is the input
 // keying material for the content encryption key and nonce.
@@ -86,7 +86,7 @@ ece_webpush_aes128gcm_decrypt(const uint8_t* rawRecvPrivKey,
 // allocate and pass a buffer of this size as the `payload` argument to
 // `ece_aes128gcm_encrypt*`.
 size_t
-ece_aes128gcm_max_payload_length(uint32_t rs, size_t padLen,
+ece_aes128gcm_payload_max_length(uint32_t rs, size_t padLen,
                                  size_t plaintextLen);
 
 // Encrypts `plaintext` with an ephemeral ECDH key pair and a random salt.
@@ -114,7 +114,7 @@ ece_aes128gcm_encrypt_with_keys(
 // allocate and pass a buffer of this size as the `payload` argument to the
 // "aesgcm" decryption functions.
 size_t
-ece_aesgcm_max_plaintext_length(size_t ciphertextLen);
+ece_aesgcm_plaintext_max_length(size_t ciphertextLen);
 
 // Decrypts a payload encrypted with the "aesgcm" scheme.
 int
@@ -128,21 +128,23 @@ ece_webpush_aesgcm_decrypt(const uint8_t* rawRecvPrivKey,
 // Extracts the salt, record size, ephemeral public key, and ciphertext from a
 // payload encrypted with the "aes128gcm" scheme.
 int
-ece_aes128gcm_payload_decode(const uint8_t* payload, size_t payloadLen,
-                             const uint8_t** salt, size_t* saltLen,
-                             const uint8_t** keyId, size_t* keyIdLen,
-                             uint32_t* rs, const uint8_t** ciphertext,
-                             size_t* ciphertextLen);
+ece_aes128gcm_payload_extract_params(const uint8_t* payload, size_t payloadLen,
+                                     const uint8_t** salt, size_t* saltLen,
+                                     const uint8_t** keyId, size_t* keyIdLen,
+                                     uint32_t* rs, const uint8_t** ciphertext,
+                                     size_t* ciphertextLen);
 
 // Extracts the ephemeral public key, salt, and record size from the sender's
 // `Crypto-Key` and `Encryption` headers. Returns an error if the header values
 // are missing or invalid, or if `saltLen` or `rawSenderPubKeyLen` are not
 // large enough to hold the Base64url-decoded `salt` and `dh` pair values.
 int
-ece_webpush_aesgcm_headers_decode(const char* cryptoKeyHeader,
-                                  const char* encryptionHeader, uint8_t* salt,
-                                  size_t saltLen, uint8_t* rawSenderPubKey,
-                                  size_t rawSenderPubKeyLen, uint32_t* rs);
+ece_webpush_aesgcm_headers_extract_params(const char* cryptoKeyHeader,
+                                          const char* encryptionHeader,
+                                          uint8_t* salt, size_t saltLen,
+                                          uint8_t* rawSenderPubKey,
+                                          size_t rawSenderPubKeyLen,
+                                          uint32_t* rs);
 
 // Decodes a Base64url-encoded (RFC 4648) string. If `decoded` is `NULL` and
 // `decodedLen` is 0, returns the minimum size of the buffer required to hold

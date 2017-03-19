@@ -338,11 +338,11 @@ error:
 }
 
 int
-ece_aes128gcm_payload_decode(const uint8_t* payload, size_t payloadLen,
-                             const uint8_t** salt, size_t* saltLen,
-                             const uint8_t** keyId, size_t* keyIdLen,
-                             uint32_t* rs, const uint8_t** ciphertext,
-                             size_t* ciphertextLen) {
+ece_aes128gcm_payload_extract_params(const uint8_t* payload, size_t payloadLen,
+                                     const uint8_t** salt, size_t* saltLen,
+                                     const uint8_t** keyId, size_t* keyIdLen,
+                                     uint32_t* rs, const uint8_t** ciphertext,
+                                     size_t* ciphertextLen) {
   if (payloadLen < ECE_AES128GCM_HEADER_LENGTH) {
     return ECE_ERROR_SHORT_HEADER;
   }
@@ -369,10 +369,12 @@ ece_aes128gcm_payload_decode(const uint8_t* payload, size_t payloadLen,
 }
 
 int
-ece_webpush_aesgcm_headers_decode(const char* cryptoKeyHeader,
-                                  const char* encryptionHeader, uint8_t* salt,
-                                  size_t saltLen, uint8_t* rawSenderPubKey,
-                                  size_t rawSenderPubKeyLen, uint32_t* rs) {
+ece_webpush_aesgcm_headers_extract_params(const char* cryptoKeyHeader,
+                                          const char* encryptionHeader,
+                                          uint8_t* salt, size_t saltLen,
+                                          uint8_t* rawSenderPubKey,
+                                          size_t rawSenderPubKeyLen,
+                                          uint32_t* rs) {
   int err = ECE_OK;
 
   ece_header_params_t* encryptionParams = NULL;

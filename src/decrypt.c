@@ -236,7 +236,7 @@ ece_aes128gcm_unpad(uint8_t* block, bool isLastRecord, size_t* blockLen) {
 }
 
 size_t
-ece_aes128gcm_max_plaintext_length(const uint8_t* payload, size_t payloadLen) {
+ece_aes128gcm_plaintext_max_length(const uint8_t* payload, size_t payloadLen) {
   const uint8_t* salt;
   size_t saltLen;
   const uint8_t* keyId;
@@ -244,9 +244,9 @@ ece_aes128gcm_max_plaintext_length(const uint8_t* payload, size_t payloadLen) {
   uint32_t rs;
   const uint8_t* ciphertext;
   size_t ciphertextLen;
-  int err =
-    ece_aes128gcm_payload_decode(payload, payloadLen, &salt, &saltLen, &keyId,
-                                 &keyIdLen, &rs, &ciphertext, &ciphertextLen);
+  int err = ece_aes128gcm_payload_extract_params(
+    payload, payloadLen, &salt, &saltLen, &keyId, &keyIdLen, &rs, &ciphertext,
+    &ciphertextLen);
   if (err) {
     return 0;
   }
@@ -254,7 +254,7 @@ ece_aes128gcm_max_plaintext_length(const uint8_t* payload, size_t payloadLen) {
 }
 
 size_t
-ece_aesgcm_max_plaintext_length(size_t ciphertextLen) {
+ece_aesgcm_plaintext_max_length(size_t ciphertextLen) {
   return ciphertextLen;
 }
 
@@ -269,9 +269,9 @@ ece_aes128gcm_decrypt(const uint8_t* ikm, size_t ikmLen, const uint8_t* payload,
   uint32_t rs;
   const uint8_t* ciphertext;
   size_t ciphertextLen;
-  int err =
-    ece_aes128gcm_payload_decode(payload, payloadLen, &salt, &saltLen, &keyId,
-                                 &keyIdLen, &rs, &ciphertext, &ciphertextLen);
+  int err = ece_aes128gcm_payload_extract_params(
+    payload, payloadLen, &salt, &saltLen, &keyId, &keyIdLen, &rs, &ciphertext,
+    &ciphertextLen);
   if (err) {
     return err;
   }
@@ -300,9 +300,9 @@ ece_webpush_aes128gcm_decrypt(const uint8_t* rawRecvPrivKey,
   uint32_t rs;
   const uint8_t* ciphertext;
   size_t ciphertextLen;
-  int err = ece_aes128gcm_payload_decode(payload, payloadLen, &salt, &saltLen,
-                                         &rawSenderPubKey, &rawSenderPubKeyLen,
-                                         &rs, &ciphertext, &ciphertextLen);
+  int err = ece_aes128gcm_payload_extract_params(
+    payload, payloadLen, &salt, &saltLen, &rawSenderPubKey, &rawSenderPubKeyLen,
+    &rs, &ciphertext, &ciphertextLen);
   if (err) {
     return err;
   }
@@ -324,7 +324,7 @@ ece_webpush_aesgcm_decrypt(const uint8_t* rawRecvPrivKey,
   uint8_t salt[ECE_SALT_LENGTH];
   uint8_t rawSenderPubKey[ECE_WEBPUSH_PUBLIC_KEY_LENGTH];
   uint32_t rs;
-  int err = ece_webpush_aesgcm_headers_decode(
+  int err = ece_webpush_aesgcm_headers_extract_params(
     cryptoKeyHeader, encryptionHeader, salt, ECE_SALT_LENGTH, rawSenderPubKey,
     ECE_WEBPUSH_PUBLIC_KEY_LENGTH, &rs);
   if (err) {

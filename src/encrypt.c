@@ -80,7 +80,7 @@ ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
   // Make sure the payload buffer is large enough to hold the header and
   // ciphertext.
   size_t maxRecordEnd =
-    ece_aes128gcm_max_payload_length(rs, padLen, plaintextLen);
+    ece_aes128gcm_payload_max_length(rs, padLen, plaintextLen);
   if (!maxRecordEnd) {
     err = ECE_ERROR_ENCRYPT;
     goto end;
@@ -187,7 +187,7 @@ end:
 }
 
 size_t
-ece_aes128gcm_max_payload_length(uint32_t rs, size_t padLen,
+ece_aes128gcm_payload_max_length(uint32_t rs, size_t padLen,
                                  size_t plaintextLen) {
   if (rs < ECE_AES128GCM_MIN_RS) {
     return 0;

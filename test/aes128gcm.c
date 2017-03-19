@@ -234,7 +234,7 @@ test_webpush_aes128gcm_encrypt() {
     memcpy(plaintext, t.plaintext, plaintextLen);
 
     size_t payloadLen =
-      ece_aes128gcm_max_payload_length(t.rs, t.pad, plaintextLen);
+      ece_aes128gcm_payload_max_length(t.rs, t.pad, plaintextLen);
     ece_assert(payloadLen, "Want maximum payload length for `%s`", t.desc);
     uint8_t* payload = calloc(payloadLen, sizeof(uint8_t));
     ece_assert(payload, "Want payload buffer length %zu for `%s`", payloadLen,
@@ -290,7 +290,7 @@ test_webpush_aes128gcm_decrypt_valid_payloads() {
     ece_assert(decodedLen, "Want decoded payload for `%s`", t.desc);
 
     size_t plaintextLen =
-      ece_aes128gcm_max_plaintext_length(payload, decodedLen);
+      ece_aes128gcm_plaintext_max_length(payload, decodedLen);
     ece_assert(plaintextLen, "Want maximum plaintext length for `%s`", t.desc);
     uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
     ece_assert(plaintext, "Want plaintext buffer length %zu for `%s`",
@@ -337,7 +337,7 @@ test_aes128gcm_decrypt_invalid_payloads() {
     ece_assert(decodedLen, "Want decoded payload for `%s`", t.desc);
 
     size_t plaintextLen =
-      ece_aes128gcm_max_plaintext_length(payload, decodedLen);
+      ece_aes128gcm_plaintext_max_length(payload, decodedLen);
     uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
 
     int err = ece_aes128gcm_decrypt(ikm, 16, payload, decodedLen, plaintext,

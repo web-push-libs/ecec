@@ -298,8 +298,8 @@ test_aesgcm_valid_crypto_params() {
     uint8_t salt[8];
     uint32_t rs;
     uint8_t rawSenderPubKey[8];
-    int err = ece_webpush_aesgcm_headers_decode(t.cryptoKey, t.encryption, salt,
-                                                8, rawSenderPubKey, 8, &rs);
+    int err = ece_webpush_aesgcm_headers_extract_params(
+      t.cryptoKey, t.encryption, salt, 8, rawSenderPubKey, 8, &rs);
 
     ece_assert(!err, "Got %d extracting params for `%s`", err, t.desc);
     ece_assert(!memcmp(salt, t.salt, 8), "Wrong salt for `%s`", t.desc);
@@ -319,8 +319,8 @@ test_aesgcm_invalid_crypto_params() {
     uint8_t salt[8];
     uint32_t rs;
     uint8_t rawSenderPubKey[8];
-    int err = ece_webpush_aesgcm_headers_decode(t.cryptoKey, t.encryption, salt,
-                                                8, rawSenderPubKey, 8, &rs);
+    int err = ece_webpush_aesgcm_headers_extract_params(
+      t.cryptoKey, t.encryption, salt, 8, rawSenderPubKey, 8, &rs);
 
     ece_assert(err == t.err, "Got %d extracting params for `%s`; want %d", err,
                t.desc, t.err);
@@ -359,7 +359,7 @@ test_aesgcm_valid_ciphertexts() {
                                       decodedLen);
     ece_assert(decodedLen, "Want decoded ciphertext for `%s`", t.desc);
 
-    size_t plaintextLen = ece_aesgcm_max_plaintext_length(decodedLen);
+    size_t plaintextLen = ece_aesgcm_plaintext_max_length(decodedLen);
     ece_assert(plaintextLen, "Want maximum plaintext length for `%s`", t.desc);
     uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
     ece_assert(plaintext, "Want plaintext buffer length %zu for `%s`",
