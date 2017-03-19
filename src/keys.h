@@ -35,6 +35,13 @@ extern "C" {
 #define ECE_WEBPUSH_AESGCM_NONCE_INFO_PREFIX_LENGTH 30
 #define ECE_WEBPUSH_AESGCM_NONCE_INFO_LENGTH 164
 
+typedef int (*derive_key_and_nonce_t)(ece_mode_t mode, EC_KEY* localKey,
+                                      EC_KEY* remoteKey,
+                                      const uint8_t* authSecret,
+                                      size_t authSecretLen,
+                                      const uint8_t* salt, size_t saltLen,
+                                      uint8_t* key, uint8_t* nonce);
+
 // Generates a 96-bit IV for decryption, 48 bits of which are populated.
 void
 ece_generate_iv(const uint8_t* nonce, uint64_t counter, uint8_t* iv);
@@ -51,8 +58,9 @@ ece_import_public_key(const uint8_t* rawKey, size_t rawKeyLen);
 
 // Derives the "aes128gcm" content encryption key and nonce.
 int
-ece_aes128gcm_derive_key_and_nonce(const uint8_t* salt, const uint8_t* ikm,
-                                   size_t ikmLen, uint8_t* key, uint8_t* nonce);
+ece_aes128gcm_derive_key_and_nonce(const uint8_t* salt, size_t saltLen,
+                                   const uint8_t* ikm, size_t ikmLen,
+                                   uint8_t* key, uint8_t* nonce);
 
 // Derives the "aes128gcm" decryption key and nonce given the receiver private
 // key, sender public key, authentication secret, and sender salt.
@@ -60,8 +68,9 @@ int
 ece_webpush_aes128gcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* localKey,
                                            EC_KEY* remoteKey,
                                            const uint8_t* authSecret,
-                                           const uint8_t* salt, uint8_t* key,
-                                           uint8_t* nonce);
+                                           size_t authSecretLen,
+                                           const uint8_t* salt, size_t saltLen,
+                                           uint8_t* key, uint8_t* nonce);
 
 // Derives the "aesgcm" decryption key and nonce given the receiver private key,
 // sender public key, authentication secret, and sender salt.
@@ -69,8 +78,9 @@ int
 ece_webpush_aesgcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* recvPrivKey,
                                         EC_KEY* senderPubKey,
                                         const uint8_t* authSecret,
-                                        const uint8_t* salt, uint8_t* key,
-                                        uint8_t* nonce);
+                                        size_t authSecretLen,
+                                        const uint8_t* salt, size_t saltLen,
+                                        uint8_t* key, uint8_t* nonce);
 
 #ifdef __cplusplus
 }

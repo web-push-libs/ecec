@@ -298,8 +298,8 @@ test_aesgcm_valid_crypto_params() {
     uint8_t salt[8];
     uint32_t rs;
     uint8_t rawSenderPubKey[8];
-    int err = ece_webpush_aesgcm_extract_params(t.cryptoKey, t.encryption, salt,
-                                                8, &rs, rawSenderPubKey, 8);
+    int err = ece_webpush_aesgcm_headers_decode(t.cryptoKey, t.encryption, salt,
+                                                8, rawSenderPubKey, 8, &rs);
 
     ece_assert(!err, "Got %d extracting params for `%s`", err, t.desc);
     ece_assert(!memcmp(salt, t.salt, 8), "Wrong salt for `%s`", t.desc);
@@ -319,8 +319,8 @@ test_aesgcm_invalid_crypto_params() {
     uint8_t salt[8];
     uint32_t rs;
     uint8_t rawSenderPubKey[8];
-    int err = ece_webpush_aesgcm_extract_params(t.cryptoKey, t.encryption, salt,
-                                                8, &rs, rawSenderPubKey, 8);
+    int err = ece_webpush_aesgcm_headers_decode(t.cryptoKey, t.encryption, salt,
+                                                8, rawSenderPubKey, 8, &rs);
 
     ece_assert(err == t.err, "Got %d extracting params for `%s`; want %d", err,
                t.desc, t.err);
@@ -334,26 +334,19 @@ test_aesgcm_valid_ciphertexts() {
   for (size_t i = 0; i < length; i++) {
     valid_ciphertext_test_t t = valid_ciphertext_tests[i];
 
-    ece_buf_t rawRecvPrivKeyBuf;
     uint8_t rawRecvPrivKey[32];
     size_t decodedLen =
       ece_base64url_decode(t.recvPrivKey, strlen(t.recvPrivKey),
                            ECE_BASE64URL_REJECT_PADDING, rawRecvPrivKey, 32);
     ece_assert(decodedLen, "Want decoded receiver private key for `%s`",
                t.desc);
-    rawRecvPrivKeyBuf.bytes = rawRecvPrivKey;
-    rawRecvPrivKeyBuf.length = 32;
 
-    ece_buf_t authSecretBuf;
     uint8_t authSecret[16];
     decodedLen =
       ece_base64url_decode(t.authSecret, strlen(t.authSecret),
                            ECE_BASE64URL_REJECT_PADDING, authSecret, 16);
     ece_assert(decodedLen, "Want decoded auth secret length for `%s`", t.desc);
-    authSecretBuf.bytes = authSecret;
-    authSecretBuf.length = 16;
 
-    ece_buf_t ciphertextBuf;
     size_t ciphertextBase64Len = strlen(t.ciphertext);
     decodedLen = ece_base64url_decode(t.ciphertext, ciphertextBase64Len,
                                       ECE_BASE64URL_REJECT_PADDING, NULL, 0);
@@ -365,24 +358,17 @@ test_aesgcm_valid_ciphertexts() {
                                       ECE_BASE64URL_REJECT_PADDING, ciphertext,
                                       decodedLen);
     ece_assert(decodedLen, "Want decoded ciphertext for `%s`", t.desc);
-    ciphertextBuf.bytes = ciphertext;
-    ciphertextBuf.length = decodedLen;
 
-    ece_buf_t plaintextBuf;
-    size_t maxPlaintextLen = ece_aesgcm_max_plaintext_length(&ciphertextBuf);
-    ece_assert(maxPlaintextLen, "Want maximum plaintext length for `%s`",
-               t.desc);
-    uint8_t* plaintext = calloc(maxPlaintextLen, sizeof(uint8_t));
+    size_t plaintextLen = ece_aesgcm_max_plaintext_length(decodedLen);
+    ece_assert(plaintextLen, "Want maximum plaintext length for `%s`", t.desc);
+    uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
     ece_assert(plaintext, "Want plaintext buffer length %zu for `%s`",
-               maxPlaintextLen, t.desc);
-    plaintextBuf.bytes = plaintext;
-    plaintextBuf.length = maxPlaintextLen;
+               plaintextLen, t.desc);
 
-    int err = ece_webpush_aesgcm_decrypt(&rawRecvPrivKeyBuf, &authSecretBuf,
-                                         t.cryptoKey, t.encryption,
-                                         &ciphertextBuf, &plaintextBuf);
+    int err = ece_webpush_aesgcm_decrypt(rawRecvPrivKey, 32, authSecret, 16,
+                                         t.cryptoKey, t.encryption, ciphertext,
+                                         decodedLen, plaintext, &plaintextLen);
     ece_assert(!err, "Got %d decrypting ciphertext for `%s`", err, t.desc);
-    size_t plaintextLen = plaintextBuf.length;
 
     size_t expectedPlaintextLen = strlen(t.plaintext);
     ece_assert(plaintextLen == expectedPlaintextLen,

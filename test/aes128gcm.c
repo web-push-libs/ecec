@@ -189,40 +189,28 @@ test_webpush_aes128gcm_encrypt() {
   for (size_t i = 0; i < tests; i++) {
     webpush_encrypt_test_t t = webpush_encrypt_tests[i];
 
-    ece_buf_t rawSenderPrivKeyBuf;
     uint8_t rawSenderPrivKey[32];
     size_t decodedLen =
       ece_base64url_decode(t.senderPrivKey, strlen(t.senderPrivKey),
                            ECE_BASE64URL_REJECT_PADDING, rawSenderPrivKey, 32);
     ece_assert(decodedLen, "Want decoded sender private key for `%s`", t.desc);
-    rawSenderPrivKeyBuf.bytes = rawSenderPrivKey;
-    rawSenderPrivKeyBuf.length = 32;
 
-    ece_buf_t rawRecvPubKeyBuf;
     uint8_t rawRecvPubKey[65];
     decodedLen =
       ece_base64url_decode(t.recvPubKey, strlen(t.recvPubKey),
                            ECE_BASE64URL_REJECT_PADDING, rawRecvPubKey, 65);
     ece_assert(decodedLen, "Want decoded receiver public key for `%s`", t.desc);
-    rawRecvPubKeyBuf.bytes = rawRecvPubKey;
-    rawRecvPubKeyBuf.length = 65;
 
-    ece_buf_t authSecretBuf;
     uint8_t authSecret[16];
     decodedLen =
       ece_base64url_decode(t.authSecret, strlen(t.authSecret),
                            ECE_BASE64URL_REJECT_PADDING, authSecret, 16);
     ece_assert(decodedLen, "Want decoded auth secret for `%s`", t.desc);
-    authSecretBuf.bytes = authSecret;
-    authSecretBuf.length = 16;
 
-    ece_buf_t saltBuf;
     uint8_t salt[16];
     decodedLen = ece_base64url_decode(t.salt, strlen(t.salt),
                                       ECE_BASE64URL_REJECT_PADDING, salt, 16);
     ece_assert(decodedLen, "Want decoded salt for `%s`", t.desc);
-    saltBuf.bytes = salt;
-    saltBuf.length = 16;
 
     size_t expectedPayloadBase64Len = strlen(t.payload);
     decodedLen = ece_base64url_decode(t.payload, expectedPayloadBase64Len,
@@ -239,30 +227,23 @@ test_webpush_aes128gcm_encrypt() {
     ece_assert(expectedPayloadLen, "Want decoded expected payload for `%s`",
                t.desc);
 
-    ece_buf_t plaintextBuf;
     size_t plaintextLen = strlen(t.plaintext);
     uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
     ece_assert(plaintext, "Want plaintext buffer length %zu for `%s`",
                plaintextLen, t.desc);
     memcpy(plaintext, t.plaintext, plaintextLen);
-    plaintextBuf.bytes = plaintext;
-    plaintextBuf.length = plaintextLen;
 
-    ece_buf_t payloadBuf;
-    size_t maxPayloadLen =
-      ece_aes128gcm_max_payload_length(t.rs, t.pad, &plaintextBuf);
-    ece_assert(maxPayloadLen, "Want maximum payload length for `%s`", t.desc);
-    uint8_t* payload = calloc(maxPayloadLen, sizeof(uint8_t));
-    ece_assert(payload, "Want payload buffer length %zu for `%s`",
-               maxPayloadLen, t.desc);
-    payloadBuf.bytes = payload;
-    payloadBuf.length = maxPayloadLen;
+    size_t payloadLen =
+      ece_aes128gcm_max_payload_length(t.rs, t.pad, plaintextLen);
+    ece_assert(payloadLen, "Want maximum payload length for `%s`", t.desc);
+    uint8_t* payload = calloc(payloadLen, sizeof(uint8_t));
+    ece_assert(payload, "Want payload buffer length %zu for `%s`", payloadLen,
+               t.desc);
 
     int err = ece_aes128gcm_encrypt_with_keys(
-      &rawSenderPrivKeyBuf, &rawRecvPubKeyBuf, &authSecretBuf, &saltBuf, t.rs,
-      t.pad, &plaintextBuf, &payloadBuf);
+      rawSenderPrivKey, 32, authSecret, 16, salt, 16, rawRecvPubKey, 65, t.rs,
+      t.pad, plaintext, plaintextLen, payload, &payloadLen);
     ece_assert(!err, "Got %d encrypting payload for `%s`", err, t.desc);
-    size_t payloadLen = payloadBuf.length;
 
     ece_assert(payloadLen == expectedPayloadLen,
                "Got payload length %zu for `%s`; want %zu", payloadLen, t.desc,
@@ -283,26 +264,19 @@ test_webpush_aes128gcm_decrypt_valid_payloads() {
   for (size_t i = 0; i < tests; i++) {
     webpush_valid_decrypt_test_t t = webpush_valid_decrypt_tests[i];
 
-    ece_buf_t rawRecvPrivKeyBuf;
     uint8_t rawRecvPrivKey[32];
     size_t decodedLen =
       ece_base64url_decode(t.recvPrivKey, strlen(t.recvPrivKey),
                            ECE_BASE64URL_REJECT_PADDING, rawRecvPrivKey, 32);
     ece_assert(decodedLen, "Want decoded receiver private key for `%s`",
                t.desc);
-    rawRecvPrivKeyBuf.bytes = rawRecvPrivKey;
-    rawRecvPrivKeyBuf.length = 32;
 
-    ece_buf_t authSecretBuf;
     uint8_t authSecret[16];
     decodedLen =
       ece_base64url_decode(t.authSecret, strlen(t.authSecret),
                            ECE_BASE64URL_REJECT_PADDING, authSecret, 16);
     ece_assert(decodedLen, "Want decoded auth secret for `%s`", t.desc);
-    authSecretBuf.bytes = authSecret;
-    authSecretBuf.length = 16;
 
-    ece_buf_t payloadBuf;
     size_t payloadBase64Len = strlen(t.payload);
     decodedLen = ece_base64url_decode(t.payload, payloadBase64Len,
                                       ECE_BASE64URL_REJECT_PADDING, NULL, 0);
@@ -314,23 +288,18 @@ test_webpush_aes128gcm_decrypt_valid_payloads() {
       ece_base64url_decode(t.payload, payloadBase64Len,
                            ECE_BASE64URL_REJECT_PADDING, payload, decodedLen);
     ece_assert(decodedLen, "Want decoded payload for `%s`", t.desc);
-    payloadBuf.bytes = payload;
-    payloadBuf.length = decodedLen;
 
-    ece_buf_t plaintextBuf;
-    size_t maxPlaintextLen = ece_aes128gcm_max_plaintext_length(&payloadBuf);
-    ece_assert(maxPlaintextLen, "Want maximum plaintext length for `%s`",
-               t.desc);
-    uint8_t* plaintext = calloc(maxPlaintextLen, sizeof(uint8_t));
+    size_t plaintextLen =
+      ece_aes128gcm_max_plaintext_length(payload, decodedLen);
+    ece_assert(plaintextLen, "Want maximum plaintext length for `%s`", t.desc);
+    uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
     ece_assert(plaintext, "Want plaintext buffer length %zu for `%s`",
-               maxPlaintextLen, t.desc);
-    plaintextBuf.bytes = plaintext;
-    plaintextBuf.length = maxPlaintextLen;
+               plaintextLen, t.desc);
 
-    int err = ece_webpush_aes128gcm_decrypt(&rawRecvPrivKeyBuf, &authSecretBuf,
-                                            &payloadBuf, &plaintextBuf);
+    int err =
+      ece_webpush_aes128gcm_decrypt(rawRecvPrivKey, 32, authSecret, 16, payload,
+                                    decodedLen, plaintext, &plaintextLen);
     ece_assert(!err, "Got %d decrypting payload for `%s`", err, t.desc);
-    size_t plaintextLen = plaintextBuf.length;
 
     size_t expectedLen = strlen(t.plaintext);
     ece_assert(plaintextLen == expectedLen,
@@ -350,15 +319,11 @@ test_aes128gcm_decrypt_invalid_payloads() {
   for (size_t i = 0; i < tests; i++) {
     invalid_decrypt_test_t t = invalid_decrypt_tests[i];
 
-    ece_buf_t ikmBuf;
     uint8_t ikm[16];
     size_t decodedLen = ece_base64url_decode(
       t.ikm, strlen(t.ikm), ECE_BASE64URL_REJECT_PADDING, ikm, 16);
     ece_assert(decodedLen, "Want decoded IKM for `%s`", t.desc);
-    ikmBuf.bytes = ikm;
-    ikmBuf.length = 16;
 
-    ece_buf_t payloadBuf;
     size_t payloadBase64Len = strlen(t.payload);
     decodedLen = ece_base64url_decode(t.payload, payloadBase64Len,
                                       ECE_BASE64URL_REJECT_PADDING, NULL, 0);
@@ -370,16 +335,13 @@ test_aes128gcm_decrypt_invalid_payloads() {
       ece_base64url_decode(t.payload, payloadBase64Len,
                            ECE_BASE64URL_REJECT_PADDING, payload, decodedLen);
     ece_assert(decodedLen, "Want decoded payload for `%s`", t.desc);
-    payloadBuf.bytes = payload;
-    payloadBuf.length = decodedLen;
 
-    ece_buf_t plaintextBuf;
-    size_t maxPlaintextLen = ece_aes128gcm_max_plaintext_length(&payloadBuf);
-    uint8_t* plaintext = calloc(maxPlaintextLen, sizeof(uint8_t));
-    plaintextBuf.bytes = plaintext;
-    plaintextBuf.length = maxPlaintextLen;
+    size_t plaintextLen =
+      ece_aes128gcm_max_plaintext_length(payload, decodedLen);
+    uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
 
-    int err = ece_aes128gcm_decrypt(&ikmBuf, &payloadBuf, &plaintextBuf);
+    int err = ece_aes128gcm_decrypt(ikm, 16, payload, decodedLen, plaintext,
+                                    &plaintextLen);
     ece_assert(err == t.err, "Got %d decrypting payload for `%s`; want %d", err,
                t.desc, t.err);
 

@@ -338,39 +338,41 @@ error:
 }
 
 int
-ece_aes128gcm_extract_params(const ece_buf_t* payload, ece_buf_t* salt,
-                             uint32_t* rs, ece_buf_t* keyId,
-                             ece_buf_t* ciphertext) {
-  if (payload->length < ECE_AES128GCM_HEADER_LENGTH) {
+ece_aes128gcm_payload_decode(const uint8_t* payload, size_t payloadLen,
+                             const uint8_t** salt, size_t* saltLen,
+                             const uint8_t** keyId, size_t* keyIdLen,
+                             uint32_t* rs, const uint8_t** ciphertext,
+                             size_t* ciphertextLen) {
+  if (payloadLen < ECE_AES128GCM_HEADER_LENGTH) {
     return ECE_ERROR_SHORT_HEADER;
   }
 
-  ece_buf_slice(payload, 0, ECE_SALT_LENGTH, salt);
+  *salt = payload;
+  *saltLen = ECE_SALT_LENGTH;
 
-  *rs = ece_read_uint32_be(&payload->bytes[ECE_SALT_LENGTH]);
+  *keyIdLen = payload[ECE_SALT_LENGTH + 4];
+  if (payloadLen < ECE_AES128GCM_HEADER_LENGTH + *keyIdLen) {
+    return ECE_ERROR_SHORT_HEADER;
+  }
+  *keyId = &payload[ECE_AES128GCM_HEADER_LENGTH];
+
+  *rs = ece_read_uint32_be(&payload[ECE_SALT_LENGTH]);
   if (*rs < ECE_AES128GCM_MIN_RS) {
     return ECE_ERROR_INVALID_RS;
   }
 
-  size_t keyIdLen = payload->bytes[ECE_SALT_LENGTH + 4];
-  if (payload->length < ECE_AES128GCM_HEADER_LENGTH + keyIdLen) {
-    return ECE_ERROR_SHORT_HEADER;
-  }
-  ece_buf_slice(payload, ECE_AES128GCM_HEADER_LENGTH,
-                ECE_AES128GCM_HEADER_LENGTH + keyIdLen, keyId);
-
-  ece_buf_slice(payload, ECE_AES128GCM_HEADER_LENGTH + keyIdLen,
-                payload->length, ciphertext);
+  size_t payloadStart = ECE_AES128GCM_HEADER_LENGTH + *keyIdLen;
+  *ciphertext = &payload[payloadStart];
+  *ciphertextLen = payloadLen - payloadStart;
 
   return ECE_OK;
 }
 
 int
-ece_webpush_aesgcm_extract_params(const char* cryptoKeyHeader,
+ece_webpush_aesgcm_headers_decode(const char* cryptoKeyHeader,
                                   const char* encryptionHeader, uint8_t* salt,
-                                  size_t saltLen, uint32_t* rs,
-                                  uint8_t* rawSenderPubKey,
-                                  size_t rawSenderPubKeyLen) {
+                                  size_t saltLen, uint8_t* rawSenderPubKey,
+                                  size_t rawSenderPubKeyLen, uint32_t* rs) {
   int err = ECE_OK;
 
   ece_header_params_t* encryptionParams = NULL;

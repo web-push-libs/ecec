@@ -58,23 +58,34 @@ end:
 // Encrypts a complete message with the given parameters.
 static int
 ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
-                             const uint8_t* authSecret, const uint8_t* salt,
-                             uint32_t rs, size_t padLen,
-                             const ece_buf_t* plaintext, ece_buf_t* payload) {
+                             const uint8_t* authSecret, size_t authSecretLen,
+                             const uint8_t* salt, size_t saltLen, uint32_t rs,
+                             size_t padLen, const uint8_t* plaintext,
+                             size_t plaintextLen, uint8_t* payload,
+                             size_t* payloadLen) {
   int err = ECE_OK;
 
   EVP_CIPHER_CTX* ctx = NULL;
   uint8_t* pad = NULL;
 
-  // Make sure the payload buffer is large enough to hold the header and
-  // ciphertext.
-  size_t maxPayloadLen =
-    ece_aes128gcm_max_payload_length(rs, padLen, plaintext);
-  if (!maxPayloadLen) {
+  if (authSecretLen != ECE_WEBPUSH_AUTH_SECRET_LENGTH) {
     err = ECE_ERROR_ENCRYPT;
     goto end;
   }
-  if (payload->length < maxPayloadLen) {
+  if (saltLen != ECE_SALT_LENGTH) {
+    err = ECE_ERROR_ENCRYPT;
+    goto end;
+  }
+
+  // Make sure the payload buffer is large enough to hold the header and
+  // ciphertext.
+  size_t maxRecordEnd =
+    ece_aes128gcm_max_payload_length(rs, padLen, plaintextLen);
+  if (!maxRecordEnd) {
+    err = ECE_ERROR_ENCRYPT;
+    goto end;
+  }
+  if (*payloadLen < maxRecordEnd) {
     err = ECE_ERROR_OUT_OF_MEMORY;
     goto end;
   }
@@ -95,35 +106,30 @@ ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
   uint8_t key[ECE_AES_KEY_LENGTH];
   uint8_t nonce[ECE_NONCE_LENGTH];
   err = ece_webpush_aes128gcm_derive_key_and_nonce(
-    ECE_MODE_ENCRYPT, senderPrivKey, recvPubKey, authSecret, salt, key, nonce);
+    ECE_MODE_ENCRYPT, senderPrivKey, recvPubKey, authSecret,
+    ECE_WEBPUSH_AUTH_SECRET_LENGTH, salt, ECE_SALT_LENGTH, key, nonce);
   if (err) {
     goto end;
   }
 
-  ece_buf_t header;
-  ece_buf_slice(payload, 0,
-                ECE_AES128GCM_HEADER_LENGTH + ECE_WEBPUSH_PUBLIC_KEY_LENGTH,
-                &header);
-  memcpy(header.bytes, salt, ECE_SALT_LENGTH);
-  ece_write_uint32_be(&header.bytes[ECE_SALT_LENGTH], rs);
-  header.bytes[ECE_SALT_LENGTH + 4] = ECE_WEBPUSH_PUBLIC_KEY_LENGTH;
-  if (!EC_POINT_point2oct(EC_KEY_get0_group(senderPrivKey),
-                          EC_KEY_get0_public_key(senderPrivKey),
-                          POINT_CONVERSION_UNCOMPRESSED,
-                          &header.bytes[ECE_AES128GCM_HEADER_LENGTH],
-                          ECE_WEBPUSH_PUBLIC_KEY_LENGTH, NULL)) {
+  // Write the header.
+  memcpy(payload, salt, ECE_SALT_LENGTH);
+  ece_write_uint32_be(&payload[ECE_SALT_LENGTH], rs);
+  payload[ECE_SALT_LENGTH + 4] = ECE_WEBPUSH_PUBLIC_KEY_LENGTH;
+  if (!EC_POINT_point2oct(
+        EC_KEY_get0_group(senderPrivKey), EC_KEY_get0_public_key(senderPrivKey),
+        POINT_CONVERSION_UNCOMPRESSED, &payload[ECE_AES128GCM_HEADER_LENGTH],
+        ECE_WEBPUSH_PUBLIC_KEY_LENGTH, NULL)) {
     err = ECE_ERROR_ENCRYPT;
     goto end;
   }
-
-  ece_buf_t ciphertext;
-  ece_buf_slice(payload, header.length, payload->length, &ciphertext);
 
   bool isLastRecord = false;
   size_t overhead = ECE_AES128GCM_MIN_RS - 1;
   size_t plaintextPerBlock = rs - overhead;
   size_t blockStart = 0;
-  size_t recordStart = 0;
+  size_t recordStart =
+    ECE_AES128GCM_HEADER_LENGTH + ECE_WEBPUSH_PUBLIC_KEY_LENGTH;
   size_t counter = 0;
   while (!isLastRecord) {
     // Pad so that at least one plaintext byte is in a block.
@@ -139,8 +145,8 @@ ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
     padLen -= blockPadLen;
 
     size_t blockEnd = blockStart + plaintextPerBlock - blockPadLen;
-    if (blockEnd >= plaintext->length) {
-      blockEnd = plaintext->length;
+    if (blockEnd >= plaintextLen) {
+      blockEnd = plaintextLen;
       if (!padLen) {
         // We've reached the last record when the plaintext and padding are
         // exhausted.
@@ -152,8 +158,8 @@ ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
     pad[0] = isLastRecord ? 2 : 1;
 
     size_t recordEnd = recordStart + blockLen + blockPadLen + overhead;
-    if (recordEnd >= ciphertext.length) {
-      recordEnd = ciphertext.length;
+    if (recordEnd >= maxRecordEnd) {
+      recordEnd = maxRecordEnd;
     }
 
     // Generate the IV for this record using the nonce.
@@ -162,9 +168,9 @@ ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
 
     // Encrypt and pad the block. `blockPadLen + 1` ensures we always write the
     // delimiter.
-    err = ece_aes128gcm_encrypt_block(
-      ctx, key, iv, &plaintext->bytes[blockStart], blockEnd - blockStart, pad,
-      blockPadLen + 1, &ciphertext.bytes[recordStart]);
+    err = ece_aes128gcm_encrypt_block(ctx, key, iv, &plaintext[blockStart],
+                                      blockEnd - blockStart, pad,
+                                      blockPadLen + 1, &payload[recordStart]);
     if (err) {
       goto end;
     }
@@ -172,7 +178,7 @@ ece_aes128gcm_encrypt_blocks(EC_KEY* senderPrivKey, EC_KEY* recvPubKey,
     recordStart = recordEnd;
     counter++;
   }
-  payload->length = header.length + recordStart;
+  *payloadLen = recordStart;
 
 end:
   EVP_CIPHER_CTX_free(ctx);
@@ -182,7 +188,7 @@ end:
 
 size_t
 ece_aes128gcm_max_payload_length(uint32_t rs, size_t padLen,
-                                 const ece_buf_t* plaintext) {
+                                 size_t plaintextLen) {
   if (rs < ECE_AES128GCM_MIN_RS) {
     return 0;
   }
@@ -190,7 +196,7 @@ ece_aes128gcm_max_payload_length(uint32_t rs, size_t padLen,
   size_t overhead = ECE_AES128GCM_MIN_RS - 1;
   // The total length of the data to encrypt, including the plaintext and
   // padding.
-  size_t dataLen = plaintext->length + padLen;
+  size_t dataLen = plaintextLen + padLen;
   // The maximum length of data to include in each record, excluding the
   // padding delimiter and authentication tag.
   size_t dataPerBlock = rs - overhead;
@@ -201,29 +207,25 @@ ece_aes128gcm_max_payload_length(uint32_t rs, size_t padLen,
 }
 
 int
-ece_aes128gcm_encrypt(const ece_buf_t* rawRecvPubKey,
-                      const ece_buf_t* authSecret, uint32_t rs, size_t padLen,
-                      const ece_buf_t* plaintext, ece_buf_t* payload) {
+ece_aes128gcm_encrypt(const uint8_t* rawRecvPubKey, size_t rawRecvPubKeyLen,
+                      const uint8_t* authSecret, size_t authSecretLen,
+                      uint32_t rs, size_t padLen, const uint8_t* plaintext,
+                      size_t plaintextLen, uint8_t* payload,
+                      size_t* payloadLen) {
   int err = ECE_OK;
 
-  uint8_t* salt = NULL;
   EC_KEY* recvPubKey = NULL;
   EC_KEY* senderPrivKey = NULL;
 
   // Generate a random salt.
-  salt = calloc(ECE_SALT_LENGTH, sizeof(uint8_t));
-  if (!salt) {
-    err = ECE_ERROR_OUT_OF_MEMORY;
-    goto end;
-  }
+  uint8_t salt[ECE_SALT_LENGTH];
   if (RAND_bytes(salt, ECE_SALT_LENGTH) <= 0) {
     err = ECE_ERROR_ENCRYPT;
     goto end;
   }
 
   // Import the receiver public key.
-  recvPubKey =
-    ece_import_public_key(rawRecvPubKey->bytes, rawRecvPubKey->length);
+  recvPubKey = ece_import_public_key(rawRecvPubKey, rawRecvPubKeyLen);
   if (!recvPubKey) {
     err = ECE_ERROR_ENCRYPT;
     goto end;
@@ -241,45 +243,42 @@ ece_aes128gcm_encrypt(const ece_buf_t* rawRecvPubKey,
   }
 
   // Encrypt the message.
-  err =
-    ece_aes128gcm_encrypt_blocks(senderPrivKey, recvPubKey, authSecret->bytes,
-                                 salt, rs, padLen, plaintext, payload);
+  err = ece_aes128gcm_encrypt_blocks(
+    senderPrivKey, recvPubKey, authSecret, authSecretLen, salt, ECE_SALT_LENGTH,
+    rs, padLen, plaintext, plaintextLen, payload, payloadLen);
 
 end:
-  free(salt);
   EC_KEY_free(recvPubKey);
   EC_KEY_free(senderPrivKey);
   return err;
 }
 
 int
-ece_aes128gcm_encrypt_with_keys(const ece_buf_t* rawSenderPrivKey,
-                                const ece_buf_t* rawRecvPubKey,
-                                const ece_buf_t* authSecret,
-                                const ece_buf_t* salt, uint32_t rs,
-                                size_t padLen, const ece_buf_t* plaintext,
-                                ece_buf_t* payload) {
+ece_aes128gcm_encrypt_with_keys(
+  const uint8_t* rawSenderPrivKey, size_t rawSenderPrivKeyLen,
+  const uint8_t* authSecret, size_t authSecretLen, const uint8_t* salt,
+  size_t saltLen, const uint8_t* rawRecvPubKey, size_t rawRecvPubKeyLen,
+  uint32_t rs, size_t padLen, const uint8_t* plaintext, size_t plaintextLen,
+  uint8_t* payload, size_t* payloadLen) {
   int err = ECE_OK;
 
   EC_KEY* senderPrivKey = NULL;
   EC_KEY* recvPubKey = NULL;
 
-  senderPrivKey =
-    ece_import_private_key(rawSenderPrivKey->bytes, rawSenderPrivKey->length);
+  senderPrivKey = ece_import_private_key(rawSenderPrivKey, rawSenderPrivKeyLen);
   if (!senderPrivKey) {
     err = ECE_ERROR_ENCRYPT;
     goto end;
   }
-  recvPubKey =
-    ece_import_public_key(rawRecvPubKey->bytes, rawRecvPubKey->length);
+  recvPubKey = ece_import_public_key(rawRecvPubKey, rawRecvPubKeyLen);
   if (!recvPubKey) {
     err = ECE_ERROR_ENCRYPT;
     goto end;
   }
 
-  err =
-    ece_aes128gcm_encrypt_blocks(senderPrivKey, recvPubKey, authSecret->bytes,
-                                 salt->bytes, rs, padLen, plaintext, payload);
+  err = ece_aes128gcm_encrypt_blocks(
+    senderPrivKey, recvPubKey, authSecret, authSecretLen, salt, saltLen, rs,
+    padLen, plaintext, plaintextLen, payload, payloadLen);
 
 end:
   EC_KEY_free(senderPrivKey);

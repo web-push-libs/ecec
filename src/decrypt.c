@@ -4,19 +4,22 @@
 
 #include <openssl/evp.h>
 
-typedef int (*derive_key_and_nonce_t)(ece_mode_t mode, EC_KEY* localKey,
-                                      EC_KEY* remoteKey,
-                                      const uint8_t* authSecret,
-                                      const uint8_t* salt, uint8_t* key,
-                                      uint8_t* nonce);
+typedef size_t (*max_decrypted_length_t)(uint32_t rs, size_t ciphertextLen);
 
 typedef int (*unpad_t)(uint8_t* block, bool isLastRecord, size_t* blockLen);
 
+// Returns the maximum decrypted length of an "aes128gcm" ciphertext.
 static inline size_t
-ece_aes128gcm_max_plaintext_length_from_ciphertext(
-  uint32_t rs, const ece_buf_t* ciphertext) {
-  size_t numRecords = (ciphertext->length / rs) + 1;
-  return ciphertext->length - (ECE_TAG_LENGTH * numRecords);
+ece_aes128gcm_max_decrypted_length(uint32_t rs, size_t ciphertextLen) {
+  size_t numRecords = (ciphertextLen / rs) + 1;
+  return ciphertextLen - (ECE_TAG_LENGTH * numRecords);
+}
+
+// Returns the maximum decrypted length of an "aesgcm" ciphertext.
+static size_t
+ece_aesgcm_max_decrypted_length(uint32_t rs, size_t ciphertextLen) {
+  ECE_UNUSED(rs);
+  return ciphertextLen;
 }
 
 // Extracts an unsigned 16-bit integer in network byte order.
@@ -65,10 +68,17 @@ end:
 static int
 ece_decrypt_records(const uint8_t* key, const uint8_t* nonce, uint32_t rs,
                     const uint8_t* ciphertext, size_t ciphertextLen,
-                    unpad_t unpad, uint8_t* plaintext, size_t* plaintextLen) {
+                    max_decrypted_length_t maxDecryptedLen, unpad_t unpad,
+                    uint8_t* plaintext, size_t* plaintextLen) {
   int err = ECE_OK;
 
   EVP_CIPHER_CTX* ctx = NULL;
+
+  size_t maxBlockEnd = maxDecryptedLen(rs, ciphertextLen);
+  if (*plaintextLen < maxBlockEnd) {
+    err = ECE_ERROR_OUT_OF_MEMORY;
+    goto end;
+  }
 
   ctx = EVP_CIPHER_CTX_new();
   if (!ctx) {
@@ -90,8 +100,8 @@ ece_decrypt_records(const uint8_t* key, const uint8_t* nonce, uint32_t rs,
     }
 
     size_t blockEnd = blockStart + recordLen - ECE_TAG_LENGTH;
-    if (blockEnd > *plaintextLen) {
-      blockEnd = *plaintextLen;
+    if (blockEnd > maxBlockEnd) {
+      blockEnd = maxBlockEnd;
     }
 
     // Generate the IV for this record using the nonce.
@@ -123,11 +133,13 @@ end:
 // the scheme.
 static int
 ece_webpush_decrypt(const uint8_t* rawRecvPrivKey, size_t rawRecvPrivKeyLen,
-                    const uint8_t* rawSenderPubKey, size_t rawSenderPubKeyLen,
                     const uint8_t* authSecret, size_t authSecretLen,
-                    const uint8_t* salt, size_t saltLen, uint32_t rs,
-                    const uint8_t* ciphertext, size_t ciphertextLen,
-                    derive_key_and_nonce_t deriveKeyAndNonce, unpad_t unpad,
+                    const uint8_t* salt, size_t saltLen,
+                    const uint8_t* rawSenderPubKey, size_t rawSenderPubKeyLen,
+                    uint32_t rs, const uint8_t* ciphertext,
+                    size_t ciphertextLen,
+                    derive_key_and_nonce_t deriveKeyAndNonce,
+                    max_decrypted_length_t maxDecryptedLen, unpad_t unpad,
                     uint8_t* plaintext, size_t* plaintextLen) {
   int err = ECE_OK;
 
@@ -161,13 +173,13 @@ ece_webpush_decrypt(const uint8_t* rawRecvPrivKey, size_t rawRecvPrivKeyLen,
   uint8_t key[ECE_AES_KEY_LENGTH];
   uint8_t nonce[ECE_NONCE_LENGTH];
   err = deriveKeyAndNonce(ECE_MODE_DECRYPT, recvPrivKey, senderPubKey,
-                          authSecret, salt, key, nonce);
+                          authSecret, authSecretLen, salt, saltLen, key, nonce);
   if (err) {
     goto end;
   }
 
-  err = ece_decrypt_records(key, nonce, rs, ciphertext, ciphertextLen, unpad,
-                            plaintext, plaintextLen);
+  err = ece_decrypt_records(key, nonce, rs, ciphertext, ciphertextLen,
+                            maxDecryptedLen, unpad, plaintext, plaintextLen);
 
 end:
   EC_KEY_free(recvPrivKey);
@@ -224,113 +236,105 @@ ece_aes128gcm_unpad(uint8_t* block, bool isLastRecord, size_t* blockLen) {
 }
 
 size_t
-ece_aes128gcm_max_plaintext_length(const ece_buf_t* payload) {
-  ece_buf_t salt;
+ece_aes128gcm_max_plaintext_length(const uint8_t* payload, size_t payloadLen) {
+  const uint8_t* salt;
+  size_t saltLen;
+  const uint8_t* keyId;
+  size_t keyIdLen;
   uint32_t rs;
-  ece_buf_t keyId;
-  ece_buf_t ciphertext;
+  const uint8_t* ciphertext;
+  size_t ciphertextLen;
   int err =
-    ece_aes128gcm_extract_params(payload, &salt, &rs, &keyId, &ciphertext);
+    ece_aes128gcm_payload_decode(payload, payloadLen, &salt, &saltLen, &keyId,
+                                 &keyIdLen, &rs, &ciphertext, &ciphertextLen);
   if (err) {
     return 0;
   }
-  return ece_aes128gcm_max_plaintext_length_from_ciphertext(rs, &ciphertext);
+  return ece_aes128gcm_max_decrypted_length(rs, ciphertextLen);
 }
 
 size_t
-ece_aesgcm_max_plaintext_length(const ece_buf_t* ciphertext) {
-  return ciphertext->length;
+ece_aesgcm_max_plaintext_length(size_t ciphertextLen) {
+  return ciphertextLen;
 }
 
 int
-ece_aes128gcm_decrypt(const ece_buf_t* ikm, const ece_buf_t* payload,
-                      ece_buf_t* plaintext) {
-  int err = ECE_OK;
-
-  ece_buf_t salt;
+ece_aes128gcm_decrypt(const uint8_t* ikm, size_t ikmLen, const uint8_t* payload,
+                      size_t payloadLen, uint8_t* plaintext,
+                      size_t* plaintextLen) {
+  const uint8_t* salt;
+  size_t saltLen;
+  const uint8_t* keyId;
+  size_t keyIdLen;
   uint32_t rs;
-  ece_buf_t rawSenderPubKey;
-  ece_buf_t ciphertext;
-  err = ece_aes128gcm_extract_params(payload, &salt, &rs, &rawSenderPubKey,
-                                     &ciphertext);
+  const uint8_t* ciphertext;
+  size_t ciphertextLen;
+  int err =
+    ece_aes128gcm_payload_decode(payload, payloadLen, &salt, &saltLen, &keyId,
+                                 &keyIdLen, &rs, &ciphertext, &ciphertextLen);
   if (err) {
-    goto end;
+    return err;
   }
-
-  if (plaintext->length <
-      ece_aes128gcm_max_plaintext_length_from_ciphertext(rs, &ciphertext)) {
-    return ECE_ERROR_OUT_OF_MEMORY;
-  }
-
   uint8_t key[ECE_AES_KEY_LENGTH];
   uint8_t nonce[ECE_NONCE_LENGTH];
-  err = ece_aes128gcm_derive_key_and_nonce(salt.bytes, ikm->bytes, ikm->length,
-                                           key, nonce);
-  if (err) {
-    goto end;
-  }
-
-  err = ece_decrypt_records(key, nonce, rs, ciphertext.bytes, ciphertext.length,
-                            &ece_aes128gcm_unpad, plaintext->bytes,
-                            &plaintext->length);
-
-end:
-  return err;
-}
-
-int
-ece_webpush_aes128gcm_decrypt(const ece_buf_t* rawRecvPrivKey,
-                              const ece_buf_t* authSecret,
-                              const ece_buf_t* payload, ece_buf_t* plaintext) {
-  ece_buf_t salt;
-  uint32_t rs;
-  ece_buf_t rawSenderPubKey;
-  ece_buf_t ciphertext;
-  int err = ece_aes128gcm_extract_params(payload, &salt, &rs, &rawSenderPubKey,
-                                         &ciphertext);
+  err =
+    ece_aes128gcm_derive_key_and_nonce(salt, saltLen, ikm, ikmLen, key, nonce);
   if (err) {
     return err;
   }
-
-  if (plaintext->length <
-      ece_aes128gcm_max_plaintext_length_from_ciphertext(rs, &ciphertext)) {
-    return ECE_ERROR_OUT_OF_MEMORY;
-  }
-
-  return ece_webpush_decrypt(
-    rawRecvPrivKey->bytes, rawRecvPrivKey->length, rawSenderPubKey.bytes,
-    rawSenderPubKey.length, authSecret->bytes, authSecret->length, salt.bytes,
-    salt.length, rs, ciphertext.bytes, ciphertext.length,
-    &ece_webpush_aes128gcm_derive_key_and_nonce, &ece_aes128gcm_unpad,
-    plaintext->bytes, &plaintext->length);
+  return ece_decrypt_records(key, nonce, rs, ciphertext, ciphertextLen,
+                             &ece_aes128gcm_max_decrypted_length,
+                             &ece_aes128gcm_unpad, plaintext, plaintextLen);
 }
 
 int
-ece_webpush_aesgcm_decrypt(const ece_buf_t* rawRecvPrivKey,
-                           const ece_buf_t* authSecret,
-                           const char* cryptoKeyHeader,
+ece_webpush_aes128gcm_decrypt(const uint8_t* rawRecvPrivKey,
+                              size_t rawRecvPrivKeyLen,
+                              const uint8_t* authSecret, size_t authSecretLen,
+                              const uint8_t* payload, size_t payloadLen,
+                              uint8_t* plaintext, size_t* plaintextLen) {
+  const uint8_t* salt;
+  size_t saltLen;
+  const uint8_t* rawSenderPubKey;
+  size_t rawSenderPubKeyLen;
+  uint32_t rs;
+  const uint8_t* ciphertext;
+  size_t ciphertextLen;
+  int err = ece_aes128gcm_payload_decode(payload, payloadLen, &salt, &saltLen,
+                                         &rawSenderPubKey, &rawSenderPubKeyLen,
+                                         &rs, &ciphertext, &ciphertextLen);
+  if (err) {
+    return err;
+  }
+  return ece_webpush_decrypt(rawRecvPrivKey, rawRecvPrivKeyLen, authSecret,
+                             authSecretLen, salt, saltLen, rawSenderPubKey,
+                             rawSenderPubKeyLen, rs, ciphertext, ciphertextLen,
+                             &ece_webpush_aes128gcm_derive_key_and_nonce,
+                             &ece_aes128gcm_max_decrypted_length,
+                             &ece_aes128gcm_unpad, plaintext, plaintextLen);
+}
+
+int
+ece_webpush_aesgcm_decrypt(const uint8_t* rawRecvPrivKey,
+                           size_t rawRecvPrivKeyLen, const uint8_t* authSecret,
+                           size_t authSecretLen, const char* cryptoKeyHeader,
                            const char* encryptionHeader,
-                           const ece_buf_t* ciphertext, ece_buf_t* plaintext) {
+                           const uint8_t* ciphertext, size_t ciphertextLen,
+                           uint8_t* plaintext, size_t* plaintextLen) {
   uint8_t salt[ECE_SALT_LENGTH];
-  uint32_t rs;
   uint8_t rawSenderPubKey[ECE_WEBPUSH_PUBLIC_KEY_LENGTH];
-  int err = ece_webpush_aesgcm_extract_params(
-    cryptoKeyHeader, encryptionHeader, salt, ECE_SALT_LENGTH, &rs,
-    rawSenderPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH);
+  uint32_t rs;
+  int err = ece_webpush_aesgcm_headers_decode(
+    cryptoKeyHeader, encryptionHeader, salt, ECE_SALT_LENGTH, rawSenderPubKey,
+    ECE_WEBPUSH_PUBLIC_KEY_LENGTH, &rs);
   if (err) {
     return err;
   }
-
-  if (plaintext->length < ece_aesgcm_max_plaintext_length(ciphertext)) {
-    return ECE_ERROR_OUT_OF_MEMORY;
-  }
-
   rs += ECE_TAG_LENGTH;
-  err = ece_webpush_decrypt(
-    rawRecvPrivKey->bytes, rawRecvPrivKey->length, rawSenderPubKey,
-    ECE_WEBPUSH_PUBLIC_KEY_LENGTH, authSecret->bytes, authSecret->length, salt,
-    ECE_SALT_LENGTH, rs, ciphertext->bytes, ciphertext->length,
-    &ece_webpush_aesgcm_derive_key_and_nonce, &ece_aesgcm_unpad,
-    plaintext->bytes, &plaintext->length);
-  return err;
+  return ece_webpush_decrypt(
+    rawRecvPrivKey, rawRecvPrivKeyLen, authSecret, authSecretLen, salt,
+    ECE_SALT_LENGTH, rawSenderPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs,
+    ciphertext, ciphertextLen, &ece_webpush_aesgcm_derive_key_and_nonce,
+    &ece_aesgcm_max_decrypted_length, &ece_aesgcm_unpad, plaintext,
+    plaintextLen);
 }

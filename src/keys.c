@@ -210,13 +210,13 @@ ece_webpush_aes128gcm_generate_info(EC_KEY* recvKey, EC_KEY* senderKey,
 }
 
 int
-ece_aes128gcm_derive_key_and_nonce(const uint8_t* salt, const uint8_t* ikm,
-                                   size_t ikmLen, uint8_t* key,
-                                   uint8_t* nonce) {
+ece_aes128gcm_derive_key_and_nonce(const uint8_t* salt, size_t saltLen,
+                                   const uint8_t* ikm, size_t ikmLen,
+                                   uint8_t* key, uint8_t* nonce) {
   uint8_t keyInfo[ECE_AES128GCM_KEY_INFO_LENGTH];
   memcpy(keyInfo, ECE_AES128GCM_KEY_INFO, ECE_AES128GCM_KEY_INFO_LENGTH);
   int err =
-    ece_hkdf_sha256(salt, ECE_SALT_LENGTH, ikm, ikmLen, keyInfo,
+    ece_hkdf_sha256(salt, saltLen, ikm, ikmLen, keyInfo,
                     ECE_AES128GCM_KEY_INFO_LENGTH, key, ECE_AES_KEY_LENGTH);
   if (err) {
     return err;
@@ -224,7 +224,7 @@ ece_aes128gcm_derive_key_and_nonce(const uint8_t* salt, const uint8_t* ikm,
 
   uint8_t nonceInfo[ECE_AES128GCM_NONCE_INFO_LENGTH];
   memcpy(nonceInfo, ECE_AES128GCM_NONCE_INFO, ECE_AES128GCM_NONCE_INFO_LENGTH);
-  return ece_hkdf_sha256(salt, ECE_SALT_LENGTH, ikm, ikmLen, nonceInfo,
+  return ece_hkdf_sha256(salt, saltLen, ikm, ikmLen, nonceInfo,
                          ECE_AES128GCM_NONCE_INFO_LENGTH, nonce,
                          ECE_NONCE_LENGTH);
 }
@@ -233,8 +233,9 @@ int
 ece_webpush_aes128gcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* localKey,
                                            EC_KEY* remoteKey,
                                            const uint8_t* authSecret,
-                                           const uint8_t* salt, uint8_t* key,
-                                           uint8_t* nonce) {
+                                           size_t authSecretLen,
+                                           const uint8_t* salt, size_t saltLen,
+                                           uint8_t* key, uint8_t* nonce) {
   int err = ECE_OK;
 
   uint8_t* sharedSecret = NULL;
@@ -274,16 +275,15 @@ ece_webpush_aes128gcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* localKey,
     goto end;
   }
   uint8_t ikm[ECE_WEBPUSH_IKM_LENGTH];
-  err = ece_hkdf_sha256(authSecret, ECE_WEBPUSH_AUTH_SECRET_LENGTH,
-                        sharedSecret, sharedSecretLen, ikmInfo,
-                        ECE_WEBPUSH_AES128GCM_IKM_INFO_LENGTH, ikm,
-                        ECE_WEBPUSH_IKM_LENGTH);
+  err = ece_hkdf_sha256(
+    authSecret, authSecretLen, sharedSecret, sharedSecretLen, ikmInfo,
+    ECE_WEBPUSH_AES128GCM_IKM_INFO_LENGTH, ikm, ECE_WEBPUSH_IKM_LENGTH);
   if (err) {
     goto end;
   }
 
-  err = ece_aes128gcm_derive_key_and_nonce(salt, ikm, ECE_WEBPUSH_IKM_LENGTH,
-                                           key, nonce);
+  err = ece_aes128gcm_derive_key_and_nonce(salt, saltLen, ikm,
+                                           ECE_WEBPUSH_IKM_LENGTH, key, nonce);
 
 end:
   free(sharedSecret);
@@ -335,8 +335,9 @@ int
 ece_webpush_aesgcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* recvPrivKey,
                                         EC_KEY* senderPubKey,
                                         const uint8_t* authSecret,
-                                        const uint8_t* salt, uint8_t* key,
-                                        uint8_t* nonce) {
+                                        size_t authSecretLen,
+                                        const uint8_t* salt, size_t saltLen,
+                                        uint8_t* key, uint8_t* nonce) {
   ECE_UNUSED(mode);
 
   int err = ECE_OK;
@@ -358,8 +359,8 @@ ece_webpush_aesgcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* recvPrivKey,
   memcpy(ikmInfo, ECE_WEBPUSH_AESGCM_IKM_INFO,
          ECE_WEBPUSH_AESGCM_IKM_INFO_LENGTH);
   err = ece_hkdf_sha256(
-    authSecret, ECE_WEBPUSH_AUTH_SECRET_LENGTH, sharedSecret, sharedSecretLen,
-    ikmInfo, ECE_WEBPUSH_AESGCM_IKM_INFO_LENGTH, ikm, ECE_WEBPUSH_IKM_LENGTH);
+    authSecret, authSecretLen, sharedSecret, sharedSecretLen, ikmInfo,
+    ECE_WEBPUSH_AESGCM_IKM_INFO_LENGTH, ikm, ECE_WEBPUSH_IKM_LENGTH);
   if (err) {
     goto end;
   }
@@ -373,8 +374,8 @@ ece_webpush_aesgcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* recvPrivKey,
   if (err) {
     goto end;
   }
-  err = ece_hkdf_sha256(salt, ECE_SALT_LENGTH, ikm, ECE_WEBPUSH_IKM_LENGTH,
-                        keyInfo, ECE_WEBPUSH_AESGCM_KEY_INFO_LENGTH, key,
+  err = ece_hkdf_sha256(salt, saltLen, ikm, ECE_WEBPUSH_IKM_LENGTH, keyInfo,
+                        ECE_WEBPUSH_AESGCM_KEY_INFO_LENGTH, key,
                         ECE_AES_KEY_LENGTH);
   if (err) {
     goto end;
@@ -386,8 +387,8 @@ ece_webpush_aesgcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* recvPrivKey,
   if (err) {
     goto end;
   }
-  err = ece_hkdf_sha256(salt, ECE_SALT_LENGTH, ikm, ECE_WEBPUSH_IKM_LENGTH,
-                        nonceInfo, ECE_WEBPUSH_AESGCM_NONCE_INFO_LENGTH, nonce,
+  err = ece_hkdf_sha256(salt, saltLen, ikm, ECE_WEBPUSH_IKM_LENGTH, nonceInfo,
+                        ECE_WEBPUSH_AESGCM_NONCE_INFO_LENGTH, nonce,
                         ECE_NONCE_LENGTH);
 
 end:
