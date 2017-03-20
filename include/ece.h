@@ -9,6 +9,7 @@ extern "C" {
 #include <stdint.h>
 
 #define ECE_SALT_LENGTH 16
+#define ECE_WEBPUSH_PRIVATE_KEY_LENGTH 32
 #define ECE_WEBPUSH_PUBLIC_KEY_LENGTH 65
 #define ECE_WEBPUSH_AUTH_SECRET_LENGTH 16
 
@@ -37,6 +38,7 @@ extern "C" {
 #define ECE_ERROR_ENCRYPT -18
 #define ECE_ERROR_ENCRYPT_PADDING -19
 #define ECE_ERROR_INVALID_AUTH_SECRET -20
+#define ECE_ERROR_GENERATE_KEYS -21
 
 // Annotates a variable or parameter as unused to avoid compiler warnings.
 #define ECE_UNUSED(x) (void) (x)
@@ -60,6 +62,13 @@ typedef enum ece_mode_e {
   ECE_MODE_ENCRYPT,
   ECE_MODE_DECRYPT,
 } ece_mode_t;
+
+// Generate a public-private ECDH key pair and auth secret for a Web Push
+// subscription.
+int
+ece_webpush_generate_keys(uint8_t* rawRecvPrivKey, size_t rawRecvPrivKeyLen,
+                          uint8_t* rawRecvPubKey, size_t rawRecvPubKeyLen,
+                          uint8_t* authSecret, size_t authSecretLen);
 
 // Returns the maximum "aes128gcm" decrypted plaintext size, including room for
 // padding. The caller should allocate and pass a buffer of this size as the

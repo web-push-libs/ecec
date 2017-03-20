@@ -16,6 +16,7 @@ set(ECE_SOURCES
   src/base64url.c
   src/encrypt.c
   src/decrypt.c
+  src/keygen.c
   src/keys.c
   src/params.c)
 add_library(ece ${ECE_SOURCES})

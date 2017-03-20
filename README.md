@@ -31,47 +31,32 @@ Encryption and usage without ECDH are planned for future releases. In the meanti
 
 ```c
 #include <ece.h>
-#include <openssl/ec.h>
-#include <openssl/ecdh.h>
-#include <openssl/rand.h>
 
-// Generate a public-private ECDH key pair for the push subscription.
-EC_KEY* subKey = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
-assert(subKey);
-assert(EC_KEY_generate_key(subKey) > 0);
+int
+main() {
+  // The subscription private key. This key should never be sent to the app
+  // server. It should be persisted with the endpoint and auth secret, and used
+  // to decrypt all messages sent to the subscription.
+  uint8_t rawRecvPrivKey[ECE_WEBPUSH_PRIVATE_KEY_LENGTH];
 
-// Export the generated private key. The private key should never be sent to
-// the app server. It should be persisted with the endpoint and auth secret,
-// and used to decrypt all messages sent to the subscription.
-size_t subPrivKeyLen = EC_KEY_priv2oct(subKey, NULL, 0);
-assert(subPrivKeyLen);
-ece_buf_t rawSubPrivKey;
-assert(ece_buf_alloc(&rawSubPrivKey, subPrivKeyLen));
-assert(EC_KEY_priv2oct(subKey, rawSubPrivKey.bytes, rawSubPrivKey.length) ==
-       rawSubPrivKey.length);
+  // The subscription public key. This key should be sent to the app server,
+  // and used to encrypt messages. The Push DOM API exposes the public key via
+  // `pushSubscription.getKey("p256dh")`.
+  uint8_t rawRecvPubKey[ECE_WEBPUSH_PUBLIC_KEY_LENGTH];
 
-// Export the subscription public key in uncompressed form. The public key
-// should be sent to the app server, and used to encrypt messages.
-ece_buf_t rawSubPubKey;
-const EC_GROUP* subGrp = EC_KEY_get0_group(subKey);
-const EC_POINT* subPubKeyPt = EC_KEY_get0_public_key(subKey);
-size_t subPubKeyLen = EC_POINT_point2oct(subGrp, subPubKeyPt,
-                                         POINT_CONVERSION_UNCOMPRESSED, NULL,
-                                         0);
-assert(subPubKeyLen);
-assert(ece_buf_alloc(&rawSubPubKey, subPubKeyLen));
-assert(EC_POINT_point2oct(subGrp, subPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
-                          rawSubPubKey.bytes,
-                          rawSubPubKey.length) == rawSubPubKey.length);
+  // The shared auth secret. This secret should be persisted with the
+  // subscription information, and sent to the app server. The DOM API exposes
+  // the auth secret via `pushSubscription.getKey("auth")`.
+  uint8_t authSecret[ECE_WEBPUSH_AUTH_SECRET_LENGTH];
 
-// Release the key once we're finished with it.
-EC_KEY_free(subKey);
-
-// Generate the authentication secret. The auth secret should be persisted
-// with the subscription information, and sent to the app server.
-ece_buf_t authSecret;
-assert(ece_buf_alloc(&authSecret, 16));
-assert(RAND_bytes(authSecret.bytes, authSecret.length) > 0);
+  int err = ece_webpush_generate_keys(
+    rawRecvPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, rawRecvPubKey,
+    ECE_WEBPUSH_PUBLIC_KEY_LENGTH, authSecret, ECE_WEBPUSH_AUTH_SECRET_LENGTH);
+  if (err) {
+    return 1;
+  }
+  return 0;
+}
 ```
 
 ### `aes128gcm`
