@@ -1,5 +1,6 @@
 #include "keys.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 #include <openssl/ec.h>

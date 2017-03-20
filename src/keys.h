@@ -38,9 +38,9 @@ extern "C" {
 typedef int (*derive_key_and_nonce_t)(ece_mode_t mode, EC_KEY* localKey,
                                       EC_KEY* remoteKey,
                                       const uint8_t* authSecret,
-                                      size_t authSecretLen,
-                                      const uint8_t* salt, size_t saltLen,
-                                      uint8_t* key, uint8_t* nonce);
+                                      size_t authSecretLen, const uint8_t* salt,
+                                      size_t saltLen, uint8_t* key,
+                                      uint8_t* nonce);
 
 // Generates a 96-bit IV for decryption, 48 bits of which are populated.
 void

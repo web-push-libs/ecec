@@ -64,24 +64,30 @@ main() {
 This is the scheme from the latest version of the encrypted content-coding draft. It's not currently supported by any encryption library or browser, but will eventually replace `aesgcm`. This scheme removes the `Crypto-Key` and `Encryption` headers. Instead, the salt, record size, and sender public key are included in the payload as a binary header block.
 
 ```c
-ece_buf_t payload;
-// Set `bytes` and `length` to the contents of the encrypted payload.
-// ecec does not take ownership of the contents; it's safe for the caller to
-// free the contents after decryption.
-payload.bytes = NULL;
-payload.length = 0;
+// Assume `rawSubPrivKey` and `authSecret` contain the subscription private key
+// and auth secret.
+uint8_t rawSubPrivKey[ECE_WEBPUSH_PRIVATE_KEY_LENGTH] = {0};
+uint8_t authSecret[ECE_WEBPUSH_AUTH_SECRET_LENGTH] = {0};
 
-// The plaintext is reset before decryption, and freed on error. If decryption
-// succeeds, we take ownership of the contents. The contents are allocated with
-// `malloc`, so it's safe to transfer ownership to functions that call
-// `free(plaintext.bytes)`.
-ece_buf_t plaintext;
+// Assume `payload` points to the contents of the encrypted payload, and
+// `payloadLen` specifies the length.
+uint8_t* payload = NULL;
+size_t payloadLen = 0;
 
-int err = ece_webpush_aes128gcm_decrypt(&rawSubPrivKey, &authSecret, &payload,
-                                        &plaintext);
+size_t plaintextLen = ece_aes128gcm_plaintext_max_length(payload, payloadLen);
+assert(plaintextLen > 0);
+uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
+assert(plaintext);
 
-assert(!err);
-ece_buf_free(&plaintext);
+int err =
+  ece_webpush_aes128gcm_decrypt(rawSubPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH,
+                                authSecret, ECE_WEBPUSH_AUTH_SECRET_LENGTH,
+                                payload, payloadLen, plaintext, &plaintextLen);
+assert(err == ECE_OK);
+
+// `plaintext[0..plaintextLen]` contains the decrypted message.
+
+free(plaintext);
 ```
 
 ### `aesgcm`
@@ -96,22 +102,29 @@ If the `Crypto-Key` header contains multiple keys, the sender must also include 
 **ecec** will extract the relevant parameters from the `Crypto-Key` and `Encryption` headers before decrypting the message. You don't need to parse the headers yourself.
 
 ```c
+uint8_t rawSubPrivKey[ECE_WEBPUSH_PRIVATE_KEY_LENGTH] = {0};
+uint8_t authSecret[ECE_WEBPUSH_AUTH_SECRET_LENGTH] = {0};
+
 const char* cryptoKeyHeader = "dh=...";
 const char* encryptionHeader = "salt=...; rs=...";
 
-// The same ownership rules apply as for `ece_webpush_aes128gcm_decrypt`.
-ece_buf_t ciphertext;
-ciphertext.bytes = NULL;
-ciphertext.length = 0;
+uint8_t* ciphertext = NULL;
+size_t ciphertextLen = 0;
 
-ece_buf_t plaintext;
+size_t plaintextLen = ece_aesgcm_plaintext_max_length(ciphertextLen);
+assert(plaintextLen > 0);
+uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
+assert(plaintext);
 
-int err = ece_webpush_aesgcm_decrypt(&rawSubPrivKey, &authSecret,
-                                     cryptoKeyHeader, encryptionHeader,
-                                     &ciphertext, &plaintext);
+int err = ece_webpush_aesgcm_decrypt(
+  rawSubPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, authSecret,
+  ECE_WEBPUSH_AUTH_SECRET_LENGTH, cryptoKeyHeader, encryptionHeader, ciphertext,
+  ciphertextLen, plaintext, &plaintextLen);
+assert(err == ECE_OK);
 
-assert(!err);
-ece_buf_free(&plaintext);
+// `plaintext[0..plaintextLen]` contains the decrypted message.
+
+free(plaintext);
 ```
 
 ## Building
