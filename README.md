@@ -1,13 +1,11 @@
 # ecec
 
-[![Build Status](https://travis-ci.org/kitcambridge/ecec.svg?branch=master)](https://travis-ci.org/kitcambridge/ecec)
-[![Coverage](https://img.shields.io/codecov/c/github/kitcambridge/ecec/master.svg)](https://codecov.io/github/kitcambridge/ecec)
+[![Build Status](https://travis-ci.org/web-push-libs/ecec.svg?branch=master)](https://travis-ci.org/web-push-libs/ecec)
+[![Coverage](https://img.shields.io/codecov/c/github/web-push-libs/ecec/master.svg)](https://codecov.io/github/web-push-libs/ecec)
 
 **ecec** is a C implementation of the [HTTP Encrypted Content-Encoding](http://httpwg.org/http-extensions/draft-ietf-httpbis-encryption-encoding.html) draft. It's a port of the reference [JavaScript implementation](https://github.com/martinthomson/encrypted-content-encoding).
 
-Currently, **ecec** only implements enough to support decrypting [Web Push messages](http://webpush-wg.github.io/webpush-encryption/), which use a shared secret derived using elliptic-curve Diffie-Hellman.
-
-Encryption and usage without ECDH are planned for future releases. In the meantime, please have a look at `tools/ece-decrypt` for an example of how to use the library, or read on.
+Encrypted content-coding is used to encrypt [Web Push messages](https://webpush-wg.github.io/webpush-encryption/), and can be used standalone.
 
 ## Table of Contents
 
