@@ -35,6 +35,12 @@ extern "C" {
 #define ECE_WEBPUSH_AESGCM_NONCE_INFO_PREFIX_LENGTH 30
 #define ECE_WEBPUSH_AESGCM_NONCE_INFO_LENGTH 164
 
+// Key derivation modes.
+typedef enum ece_mode_e {
+  ECE_MODE_ENCRYPT,
+  ECE_MODE_DECRYPT,
+} ece_mode_t;
+
 typedef int (*derive_key_and_nonce_t)(ece_mode_t mode, EC_KEY* localKey,
                                       EC_KEY* remoteKey,
                                       const uint8_t* authSecret,

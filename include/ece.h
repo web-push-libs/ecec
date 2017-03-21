@@ -57,12 +57,6 @@ typedef enum ece_base64url_decode_policy_e {
   ECE_BASE64URL_REJECT_PADDING,
 } ece_base64url_decode_policy_t;
 
-// Key derivation modes.
-typedef enum ece_mode_e {
-  ECE_MODE_ENCRYPT,
-  ECE_MODE_DECRYPT,
-} ece_mode_t;
-
 // Generate a public-private ECDH key pair and auth secret for a Web Push
 // subscription.
 int
