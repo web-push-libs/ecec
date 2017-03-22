@@ -11,6 +11,7 @@ addons:
     packages:
       - cmake
       - cmake-data
+      - valgrind
 
 cache:
   ccache: true
@@ -35,6 +36,7 @@ script:
   - pushd build
   - env COVERAGE=1 cmake -DOPENSSL_ROOT_DIR=$HOME/.local ..
   - make check
+  - valgrind --leak-check=full ./ece-test
   - popd
 
 after_success:
