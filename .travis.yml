@@ -28,19 +28,7 @@ before_install:
   - "[ -f $HOME/.src/lcov-$LCOV_VERSION.tar.gz ] || wget -P $HOME/.src https://github.com/linux-test-project/lcov/releases/download/v$LCOV_VERSION/lcov-$LCOV_VERSION.tar.gz"
 
 install:
-  - mkdir $HOME/.deps
-  - pushd $HOME/.deps
-  - tar xzf $HOME/.src/openssl-$OPENSSL_VERSION.tar.gz
-  - pushd openssl-$OPENSSL_VERSION
-  - env CC="ccache cc" CXX="ccache c++" ./config --prefix=$HOME/.local > build.log 2>&1 || (cat build.log && exit 1)
-  - make > build.log 2>&1 || (cat build.log && exit 1)
-  - make install > build.log 2>&1 || (cat build.log && exit 1)
-  - popd
-  - tar xzf $HOME/.src/lcov-$LCOV_VERSION.tar.gz
-  - pushd lcov-$LCOV_VERSION
-  - make -e PREFIX=$HOME/.local install > build.log 2>&1 || (cat build.log && exit 1)
-  - popd
-  - popd
+  - ./.travis/install.sh
 
 script:
   - mkdir build

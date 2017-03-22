@@ -135,7 +135,7 @@ free(plaintext);
 
 ### macOS and \*nix
 
-OpenSSL 1.1.0 is new, and backward-incompatible with 1.0.x. If your package manager ([MacPorts](https://www.macports.org/), [Homebrew](https://brew.sh/), [APT](https://help.ubuntu.com/community/AptGet/Howto), [DNF](https://dnf.readthedocs.io/en/latest/), [yum](http://yum.baseurl.org/)) doesn't have 1.1.0 yet, you'll need to compile it yourself. **ecec** does this to run its tests on [Travis CI](https://docs.travis-ci.com/user/ci-environment/); please see `.travis.yml` for the commands.
+OpenSSL 1.1.0 is new, and backward-incompatible with 1.0.x. If your package manager ([MacPorts](https://www.macports.org/), [Homebrew](https://brew.sh/), [APT](https://help.ubuntu.com/community/AptGet/Howto), [DNF](https://dnf.readthedocs.io/en/latest/), [yum](http://yum.baseurl.org/)) doesn't have 1.1.0 yet, you'll need to compile it yourself. **ecec** does this to run its tests on [Travis CI](https://docs.travis-ci.com/user/ci-environment/); please see `.travis/install.sh` for the commands.
 
 In particular, you'll need to set the `OPENSSL_ROOT_DIR` cache entry for CMake to find your compiled version. To build the library:
 
