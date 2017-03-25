@@ -295,7 +295,7 @@ end:
 // followed by the length-prefixed (unsigned 16-bit integers) receiver and
 // sender public keys.
 static int
-ece_webpush_aesgcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
+ece_webpush_aesgcm_generate_info(EC_KEY* recvKey, EC_KEY* senderKey,
                                  const char* prefix, size_t prefixLen,
                                  uint8_t* info) {
   size_t offset = 0;
@@ -307,8 +307,8 @@ ece_webpush_aesgcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
   // Copy the length-prefixed receiver public key.
   ece_write_uint16_be(&info[offset], ECE_WEBPUSH_PUBLIC_KEY_LENGTH);
   offset += 2;
-  const EC_GROUP* recvGrp = EC_KEY_get0_group(recvPrivKey);
-  const EC_POINT* recvPubKeyPt = EC_KEY_get0_public_key(recvPrivKey);
+  const EC_GROUP* recvGrp = EC_KEY_get0_group(recvKey);
+  const EC_POINT* recvPubKeyPt = EC_KEY_get0_public_key(recvKey);
   size_t recvPubKeyLen =
     EC_POINT_point2oct(recvGrp, recvPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
                        &info[offset], ECE_WEBPUSH_PUBLIC_KEY_LENGTH, NULL);
@@ -320,8 +320,8 @@ ece_webpush_aesgcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
   // Copy the length-prefixed sender public key.
   ece_write_uint16_be(&info[offset], ECE_WEBPUSH_PUBLIC_KEY_LENGTH);
   offset += 2;
-  const EC_GROUP* senderGrp = EC_KEY_get0_group(senderPubKey);
-  const EC_POINT* senderPubKeyPt = EC_KEY_get0_public_key(senderPubKey);
+  const EC_GROUP* senderGrp = EC_KEY_get0_group(senderKey);
+  const EC_POINT* senderPubKeyPt = EC_KEY_get0_public_key(senderKey);
   size_t senderPubKeyLen =
     EC_POINT_point2oct(senderGrp, senderPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
                        &info[offset], ECE_WEBPUSH_PUBLIC_KEY_LENGTH, NULL);
@@ -333,8 +333,8 @@ ece_webpush_aesgcm_generate_info(EC_KEY* recvPrivKey, EC_KEY* senderPubKey,
 }
 
 int
-ece_webpush_aesgcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* recvPrivKey,
-                                        EC_KEY* senderPubKey,
+ece_webpush_aesgcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* localKey,
+                                        EC_KEY* remoteKey,
                                         const uint8_t* authSecret,
                                         size_t authSecretLen,
                                         const uint8_t* salt, size_t saltLen,
@@ -346,8 +346,7 @@ ece_webpush_aesgcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* recvPrivKey,
   uint8_t* sharedSecret = NULL;
 
   size_t sharedSecretLen = 0;
-  sharedSecret =
-    ece_compute_secret(recvPrivKey, senderPubKey, &sharedSecretLen);
+  sharedSecret = ece_compute_secret(localKey, remoteKey, &sharedSecretLen);
   if (!sharedSecret) {
     err = ECE_ERROR_COMPUTE_SECRET;
     goto end;
@@ -369,22 +368,42 @@ ece_webpush_aesgcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* recvPrivKey,
   // Next, derive the AES decryption key and nonce. We include the sender and
   // receiver public keys in the info strings.
   uint8_t keyInfo[ECE_WEBPUSH_AESGCM_KEY_INFO_LENGTH];
-  err = ece_webpush_aesgcm_generate_info(
-    recvPrivKey, senderPubKey, ECE_WEBPUSH_AESGCM_KEY_INFO_PREFIX,
-    ECE_WEBPUSH_AESGCM_KEY_INFO_PREFIX_LENGTH, keyInfo);
+  uint8_t nonceInfo[ECE_WEBPUSH_AESGCM_NONCE_INFO_LENGTH];
+  switch (mode) {
+  case ECE_MODE_ENCRYPT:
+    err = ece_webpush_aesgcm_generate_info(
+      remoteKey, localKey, ECE_WEBPUSH_AESGCM_KEY_INFO_PREFIX,
+      ECE_WEBPUSH_AESGCM_KEY_INFO_PREFIX_LENGTH, keyInfo);
+    if (err) {
+      break;
+    }
+    err = ece_webpush_aesgcm_generate_info(
+      remoteKey, localKey, ECE_WEBPUSH_AESGCM_NONCE_INFO_PREFIX,
+      ECE_WEBPUSH_AESGCM_NONCE_INFO_PREFIX_LENGTH, nonceInfo);
+    break;
+
+  case ECE_MODE_DECRYPT:
+    err = ece_webpush_aesgcm_generate_info(
+      localKey, remoteKey, ECE_WEBPUSH_AESGCM_KEY_INFO_PREFIX,
+      ECE_WEBPUSH_AESGCM_KEY_INFO_PREFIX_LENGTH, keyInfo);
+    if (err) {
+      break;
+    }
+    err = ece_webpush_aesgcm_generate_info(
+      localKey, remoteKey, ECE_WEBPUSH_AESGCM_NONCE_INFO_PREFIX,
+      ECE_WEBPUSH_AESGCM_NONCE_INFO_PREFIX_LENGTH, nonceInfo);
+    break;
+
+  default:
+    assert(false);
+    err = ECE_ERROR_DECRYPT;
+  }
   if (err) {
     goto end;
   }
   err = ece_hkdf_sha256(salt, saltLen, ikm, ECE_WEBPUSH_IKM_LENGTH, keyInfo,
                         ECE_WEBPUSH_AESGCM_KEY_INFO_LENGTH, key,
                         ECE_AES_KEY_LENGTH);
-  if (err) {
-    goto end;
-  }
-  uint8_t nonceInfo[ECE_WEBPUSH_AESGCM_NONCE_INFO_LENGTH];
-  err = ece_webpush_aesgcm_generate_info(
-    recvPrivKey, senderPubKey, ECE_WEBPUSH_AESGCM_NONCE_INFO_PREFIX,
-    ECE_WEBPUSH_AESGCM_NONCE_INFO_PREFIX_LENGTH, nonceInfo);
   if (err) {
     goto end;
   }

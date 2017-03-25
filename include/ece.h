@@ -17,6 +17,8 @@ extern "C" {
 #define ECE_AES128GCM_HEADER_LENGTH 21
 #define ECE_AES128GCM_MAX_KEY_ID_LENGTH 255
 
+#define ECE_AESGCM_MIN_RS 2
+
 #define ECE_OK 0
 #define ECE_ERROR_OUT_OF_MEMORY -1
 #define ECE_ERROR_INVALID_PRIVATE_KEY -2
@@ -59,7 +61,7 @@ typedef enum ece_base64url_decode_policy_e {
   /*!
    * Fails decoding if the input is padded. This follows the strict Base64url
    * variant used in JWS (RFC 7515, Appendix C) and
-   * draft-ietf-httpbis-encryption-encoding-04. */
+   * draft-ietf-httpbis-encryption-encoding-03. */
   ECE_BASE64URL_REJECT_PADDING,
 } ece_base64url_decode_policy_t;
 
@@ -274,6 +276,24 @@ ece_aes128gcm_encrypt_with_keys(
   size_t saltLen, const uint8_t* rawRecvPubKey, size_t rawRecvPubKeyLen,
   uint32_t rs, size_t padLen, const uint8_t* plaintext, size_t plaintextLen,
   uint8_t* payload, size_t* payloadLen);
+
+/*!
+ * ...
+ */
+size_t
+ece_aesgcm_ciphertext_max_length(uint32_t rs, size_t padLen,
+                                 size_t plaintextLen);
+
+/*!
+ * ...
+ */
+int
+ece_webpush_aesgcm_encrypt_with_keys(
+  const uint8_t* rawSenderPrivKey, size_t rawSenderPrivKeyLen,
+  const uint8_t* authSecret, size_t authSecretLen, const uint8_t* salt,
+  size_t saltLen, const uint8_t* rawRecvPubKey, size_t rawRecvPubKeyLen,
+  uint32_t rs, size_t padLen, const uint8_t* plaintext, size_t plaintextLen,
+  uint8_t* ciphertext, size_t* ciphertextLen);
 
 /*!
  * Calculates the maximum "aesgcm" plaintext size. The caller should allocate
