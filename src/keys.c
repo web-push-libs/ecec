@@ -188,22 +188,22 @@ ece_webpush_aes128gcm_generate_info(EC_KEY* recvKey, EC_KEY* senderKey,
 
   // Copy the receiver public key.
   const EC_GROUP* recvGrp = EC_KEY_get0_group(recvKey);
-  const EC_POINT* recvKeyPt = EC_KEY_get0_public_key(recvKey);
-  size_t recvKeyLen =
-    EC_POINT_point2oct(recvGrp, recvKeyPt, POINT_CONVERSION_UNCOMPRESSED,
+  const EC_POINT* recvPubKeyPt = EC_KEY_get0_public_key(recvKey);
+  size_t recvPubKeyLen =
+    EC_POINT_point2oct(recvGrp, recvPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
                        &info[offset], ECE_WEBPUSH_PUBLIC_KEY_LENGTH, NULL);
-  if (!recvKeyLen) {
+  if (!recvPubKeyLen) {
     return ECE_ERROR_ENCODE_PUBLIC_KEY;
   }
-  offset += recvKeyLen;
+  offset += recvPubKeyLen;
 
   // Copy the sender public key.
   const EC_GROUP* senderGrp = EC_KEY_get0_group(senderKey);
-  const EC_POINT* senderKeyPt = EC_KEY_get0_public_key(senderKey);
-  size_t senderKeyLen =
-    EC_POINT_point2oct(senderGrp, senderKeyPt, POINT_CONVERSION_UNCOMPRESSED,
+  const EC_POINT* senderPubKeyPt = EC_KEY_get0_public_key(senderKey);
+  size_t senderPubKeyLen =
+    EC_POINT_point2oct(senderGrp, senderPubKeyPt, POINT_CONVERSION_UNCOMPRESSED,
                        &info[offset], ECE_WEBPUSH_PUBLIC_KEY_LENGTH, NULL);
-  if (!senderKeyLen) {
+  if (!senderPubKeyLen) {
     return ECE_ERROR_ENCODE_PUBLIC_KEY;
   }
 
