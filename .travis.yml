@@ -11,6 +11,7 @@ addons:
     packages:
       - cmake
       - cmake-data
+      - electric-fence
       - valgrind
 
 cache:
@@ -23,10 +24,12 @@ env:
     - OPENSSL_VERSION=1.1.0e
     - LCOV_VERSION=1.13
     - PATH=$HOME/.local/bin:$PATH
+  matrix:
+    - COVERAGE=1 CMAKE_BUILD_TYPE=Debug
+    - CMAKE_BUILD_TYPE=Release
 
 before_install:
-  - "[ -f $HOME/.src/openssl-$OPENSSL_VERSION.tar.gz ] || wget -P $HOME/.src https://www.openssl.org/source/openssl-$OPENSSL_VERSION.tar.gz"
-  - "[ -f $HOME/.src/lcov-$LCOV_VERSION.tar.gz ] || wget -P $HOME/.src https://github.com/linux-test-project/lcov/releases/download/v$LCOV_VERSION/lcov-$LCOV_VERSION.tar.gz"
+  - ./.travis/before_install.sh
 
 install:
   - ./.travis/install.sh
@@ -34,11 +37,10 @@ install:
 script:
   - mkdir build
   - pushd build
-  - env COVERAGE=1 cmake -DOPENSSL_ROOT_DIR=$HOME/.local ..
+  - cmake -DOPENSSL_ROOT_DIR=$HOME/.local ..
   - make check
   - valgrind --leak-check=full ./ece-test
   - popd
 
 after_success:
-  - lcov --directory . --no-external --capture --output-file coverage.info
-  - bash <(curl -s https://codecov.io/bash) -X gcov -X coveragepy
+  - ./.travis/after_success.sh
