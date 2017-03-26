@@ -9,18 +9,6 @@ typedef struct encrypt_test_s {
   uint32_t rs;
 } encrypt_test_t;
 
-typedef struct webpush_encrypt_test_s {
-  const char* desc;
-  const char* payload;
-  const char* senderPrivKey;
-  const char* recvPubKey;
-  const char* authSecret;
-  const char* salt;
-  const char* plaintext;
-  uint32_t rs;
-  uint8_t pad;
-} webpush_encrypt_test_t;
-
 typedef struct webpush_valid_decrypt_test_s {
   const char* desc;
   const char* plaintext;
@@ -36,7 +24,7 @@ typedef struct invalid_decrypt_test_s {
   int err;
 } invalid_decrypt_test_t;
 
-static webpush_encrypt_test_t webpush_encrypt_tests[] = {
+static webpush_encrypt_test_t webpush_aes128gcm_encrypt_tests[] = {
   {
     .desc = "Example from draft-ietf-webpush-encryption-latest",
     .payload = "DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z9KsN6nGRTbVYI_"
@@ -185,75 +173,12 @@ static invalid_decrypt_test_t invalid_decrypt_tests[] = {
 
 void
 test_webpush_aes128gcm_encrypt() {
-  size_t tests = sizeof(webpush_encrypt_tests) / sizeof(webpush_encrypt_test_t);
+  size_t tests =
+    sizeof(webpush_aes128gcm_encrypt_tests) / sizeof(webpush_encrypt_test_t);
   for (size_t i = 0; i < tests; i++) {
-    webpush_encrypt_test_t t = webpush_encrypt_tests[i];
-
-    uint8_t rawSenderPrivKey[32];
-    size_t decodedLen =
-      ece_base64url_decode(t.senderPrivKey, strlen(t.senderPrivKey),
-                           ECE_BASE64URL_REJECT_PADDING, rawSenderPrivKey, 32);
-    ece_assert(decodedLen, "Want decoded sender private key for `%s`", t.desc);
-
-    uint8_t rawRecvPubKey[65];
-    decodedLen =
-      ece_base64url_decode(t.recvPubKey, strlen(t.recvPubKey),
-                           ECE_BASE64URL_REJECT_PADDING, rawRecvPubKey, 65);
-    ece_assert(decodedLen, "Want decoded receiver public key for `%s`", t.desc);
-
-    uint8_t authSecret[16];
-    decodedLen =
-      ece_base64url_decode(t.authSecret, strlen(t.authSecret),
-                           ECE_BASE64URL_REJECT_PADDING, authSecret, 16);
-    ece_assert(decodedLen, "Want decoded auth secret for `%s`", t.desc);
-
-    uint8_t salt[16];
-    decodedLen = ece_base64url_decode(t.salt, strlen(t.salt),
-                                      ECE_BASE64URL_REJECT_PADDING, salt, 16);
-    ece_assert(decodedLen, "Want decoded salt for `%s`", t.desc);
-
-    size_t expectedPayloadBase64Len = strlen(t.payload);
-    decodedLen = ece_base64url_decode(t.payload, expectedPayloadBase64Len,
-                                      ECE_BASE64URL_REJECT_PADDING, NULL, 0);
-    ece_assert(decodedLen, "Want decoded expected payload length for `%s`",
-               t.desc);
-    uint8_t* expectedPayload = calloc(decodedLen, sizeof(uint8_t));
-    ece_assert(expectedPayload,
-               "Want expected payload buffer length %zu for `%s`", decodedLen,
-               t.desc);
-    size_t expectedPayloadLen = ece_base64url_decode(
-      t.payload, expectedPayloadBase64Len, ECE_BASE64URL_REJECT_PADDING,
-      expectedPayload, decodedLen);
-    ece_assert(expectedPayloadLen, "Want decoded expected payload for `%s`",
-               t.desc);
-
-    size_t plaintextLen = strlen(t.plaintext);
-    uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
-    ece_assert(plaintext, "Want plaintext buffer length %zu for `%s`",
-               plaintextLen, t.desc);
-    memcpy(plaintext, t.plaintext, plaintextLen);
-
-    size_t payloadLen =
-      ece_aes128gcm_payload_max_length(t.rs, t.pad, plaintextLen);
-    ece_assert(payloadLen, "Want maximum payload length for `%s`", t.desc);
-    uint8_t* payload = calloc(payloadLen, sizeof(uint8_t));
-    ece_assert(payload, "Want payload buffer length %zu for `%s`", payloadLen,
-               t.desc);
-
-    int err = ece_aes128gcm_encrypt_with_keys(
-      rawSenderPrivKey, 32, authSecret, 16, salt, 16, rawRecvPubKey, 65, t.rs,
-      t.pad, plaintext, plaintextLen, payload, &payloadLen);
-    ece_assert(!err, "Got %d encrypting payload for `%s`", err, t.desc);
-
-    ece_assert(payloadLen == expectedPayloadLen,
-               "Got payload length %zu for `%s`; want %zu", payloadLen, t.desc,
-               expectedPayloadLen);
-    ece_assert(!memcmp(payload, expectedPayload, payloadLen),
-               "Wrong payload for `%s`", t.desc);
-
-    free(expectedPayload);
-    free(plaintext);
-    free(payload);
+    test_webpush_encrypt(&webpush_aes128gcm_encrypt_tests[i],
+                         &ece_aes128gcm_payload_max_length,
+                         &ece_aes128gcm_encrypt_with_keys);
   }
 }
 

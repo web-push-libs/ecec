@@ -289,6 +289,22 @@ static valid_ciphertext_test_t valid_ciphertext_tests[] = {
   },
 };
 
+static webpush_encrypt_test_t webpush_aesgcm_encrypt_tests[] = {
+  {
+    .desc = "Example from draft-ietf-webpush-encryption-04",
+    .payload = "6nqAQUME8hNqw5J3kl8cpVVJylXKYqZOeseZG8UueKpA",
+    .senderPrivKey = "nCScek-QpEjmOOlT-rQ38nZzvdPlqa00Zy0i6m2OJvY",
+    .recvPubKey = "BCEkBjzL8Z3C-oi2Q7oE5t2Np-"
+                  "p7osjGLg93qUP0wvqRT21EEWyf0cQDQcakQMqz4hQKYOQ3il2nNZct4HgAUQ"
+                  "U",
+    .authSecret = "R29vIGdvbyBnJyBqb29iIQ",
+    .salt = "lngarbyKfMoi9Z75xYXmkg",
+    .plaintext = "I am the walrus",
+    .rs = 4096,
+    .pad = 0,
+  },
+};
+
 void
 test_aesgcm_valid_crypto_params() {
   size_t length = sizeof(valid_param_tests) / sizeof(valid_param_test_t);
@@ -379,5 +395,16 @@ test_aesgcm_valid_ciphertexts() {
 
     free(ciphertext);
     free(plaintext);
+  }
+}
+
+void
+test_webpush_aesgcm_encrypt() {
+  size_t tests =
+    sizeof(webpush_aesgcm_encrypt_tests) / sizeof(webpush_encrypt_test_t);
+  for (size_t i = 0; i < tests; i++) {
+    test_webpush_encrypt(&webpush_aesgcm_encrypt_tests[i],
+                         &ece_aesgcm_ciphertext_max_length,
+                         &ece_webpush_aesgcm_encrypt_with_keys);
   }
 }
