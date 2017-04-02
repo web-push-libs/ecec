@@ -445,6 +445,7 @@ end:
 size_t
 ece_aesgcm_ciphertext_max_length(uint32_t rs, size_t padLen,
                                  size_t plaintextLen) {
+  rs += ECE_TAG_LENGTH;
   return ece_ciphertext_max_length(rs, ECE_AESGCM_PAD_SIZE, padLen,
                                    plaintextLen);
 }
