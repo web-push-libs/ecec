@@ -13,8 +13,7 @@
 
 typedef size_t (*min_block_pad_length_t)(size_t padLen, size_t dataPerBlock);
 
-typedef int (*encrypt_block_t)(EVP_CIPHER_CTX* ctx, const uint8_t* key,
-                               const uint8_t* iv, const uint8_t* plaintext,
+typedef int (*encrypt_block_t)(EVP_CIPHER_CTX* ctx, const uint8_t* plaintext,
                                size_t plaintextLen, uint8_t* pad, size_t padLen,
                                bool lastRecord, uint8_t* record);
 
@@ -78,63 +77,36 @@ ece_ciphertext_max_length(uint32_t rs, size_t padSize, size_t padLen,
 
 // Encrypts an "aes128gcm" block into `record`.
 static int
-ece_aes128gcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* key,
-                            const uint8_t* iv, const uint8_t* plaintext,
+ece_aes128gcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* plaintext,
                             size_t plaintextLen, uint8_t* pad, size_t padLen,
                             bool lastRecord, uint8_t* record) {
-  if (EVP_EncryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key, iv) <= 0) {
-    return ECE_ERROR_ENCRYPT;
-  }
-
   int chunkLen = -1;
-  size_t offset = 0;
 
   // The plaintext block precedes the padding.
   if (EVP_EncryptUpdate(ctx, record, &chunkLen, plaintext,
                         (int) plaintextLen) <= 0) {
     return ECE_ERROR_ENCRYPT;
   }
-  offset += plaintextLen;
 
   // The padding block comprises the delimiter, followed by zeros up to the end
   // of the block.
   pad[0] = lastRecord ? 2 : 1;
-  if (EVP_EncryptUpdate(ctx, &record[offset], &chunkLen, pad,
+  if (EVP_EncryptUpdate(ctx, &record[plaintextLen], &chunkLen, pad,
                         (int) (padLen + ECE_AES128GCM_PAD_SIZE)) <= 0) {
     return ECE_ERROR_ENCRYPT;
   }
-  offset += padLen + ECE_AES128GCM_PAD_SIZE;
 
-  // OpenSSL requires us to finalize the encryption, but, since we're using a
-  // stream cipher, finalization shouldn't write out any bytes.
-  if (EVP_EncryptFinal_ex(ctx, NULL, &chunkLen) <= 0) {
-    return ECE_ERROR_ENCRYPT;
-  }
-
-  // Append the authentication tag.
-  if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, ECE_TAG_LENGTH,
-                          &record[offset]) <= 0) {
-    return ECE_ERROR_ENCRYPT;
-  }
-
-  EVP_CIPHER_CTX_reset(ctx);
   return ECE_OK;
 }
 
 // Encrypts an "aesgcm" block into `record`.
 static int
-ece_aesgcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* key,
-                         const uint8_t* iv, const uint8_t* plaintext,
+ece_aesgcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* plaintext,
                          size_t plaintextLen, uint8_t* pad, size_t padLen,
                          bool lastRecord, uint8_t* record) {
   ECE_UNUSED(lastRecord);
 
-  if (EVP_EncryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key, iv) <= 0) {
-    return ECE_ERROR_ENCRYPT;
-  }
-
   int chunkLen = -1;
-  size_t offset = 0;
 
   // The padding block comprises the padding length as a 16-bit integer,
   // followed by that many zeros. We checked that the length fits into a
@@ -144,25 +116,13 @@ ece_aesgcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* key,
                         (int) (padLen + ECE_AESGCM_PAD_SIZE)) <= 0) {
     return ECE_ERROR_ENCRYPT;
   }
-  offset += padLen + ECE_AESGCM_PAD_SIZE;
 
   // The plaintext block follows the padding.
-  if (EVP_EncryptUpdate(ctx, &record[offset], &chunkLen, plaintext,
-                        (int) plaintextLen) <= 0) {
-    return ECE_ERROR_ENCRYPT;
-  }
-  offset += plaintextLen;
-
-  if (EVP_EncryptFinal_ex(ctx, NULL, &chunkLen) <= 0) {
+  if (EVP_EncryptUpdate(ctx, &record[padLen + ECE_AESGCM_PAD_SIZE], &chunkLen,
+                        plaintext, (int) plaintextLen) <= 0) {
     return ECE_ERROR_ENCRYPT;
   }
 
-  if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, ECE_TAG_LENGTH,
-                          &record[offset]) <= 0) {
-    return ECE_ERROR_ENCRYPT;
-  }
-
-  EVP_CIPHER_CTX_reset(ctx);
   return ECE_OK;
 }
 
@@ -286,13 +246,35 @@ ece_webpush_encrypt_plaintext(
     uint8_t iv[ECE_NONCE_LENGTH];
     ece_generate_iv(nonce, counter, iv);
 
-    // Encrypt and pad the block.
-    err =
-      encryptBlock(ctx, key, iv, &plaintext[plaintextStart], blockPlaintextLen,
-                   pad, blockPadLen, lastRecord, &ciphertext[ciphertextStart]);
-    if (err) {
+    if (EVP_EncryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key, iv) <= 0) {
+      err = ECE_ERROR_ENCRYPT;
       goto end;
     }
+
+    // Encrypt and pad the block.
+    err = encryptBlock(ctx, &plaintext[plaintextStart], blockPlaintextLen, pad,
+                       blockPadLen, lastRecord, &ciphertext[ciphertextStart]);
+    if (err) {
+      err = ECE_ERROR_ENCRYPT;
+      goto end;
+    }
+
+    // OpenSSL requires us to finalize the encryption, but, since we're using a
+    // stream cipher, finalization shouldn't write out any bytes.
+    int chunkLen = -1;
+    if (EVP_EncryptFinal_ex(ctx, NULL, &chunkLen) <= 0) {
+      err = ECE_ERROR_ENCRYPT;
+      goto end;
+    }
+
+    // Append the authentication tag.
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, ECE_TAG_LENGTH,
+                            &ciphertext[ciphertextEnd - ECE_TAG_LENGTH]) <= 0) {
+      err = ECE_ERROR_ENCRYPT;
+      goto end;
+    }
+
+    EVP_CIPHER_CTX_reset(ctx);
 
     plaintextStart = plaintextEnd;
     ciphertextStart = ciphertextEnd;

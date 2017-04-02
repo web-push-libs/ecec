@@ -313,6 +313,28 @@ static webpush_encrypt_test_t webpush_aesgcm_encrypt_tests[] = {
     .rs = 4096,
     .pad = 0,
   },
+  {
+    .desc = "rs = 4 with trailer",
+    .payload =
+      "6H2BBY0l0dv88xxdUtQ5UbR8YwdNbbPwr4nks65kPQC1ztqETPebzrf5TtyVqfh4Tc_wt-"
+      "vcJ36aF9vUYniqjX7pZSSBIuhAgTdMq9A9uDuYOds0KIj5aFg1Jlg0uxHm2x6wlc0XXhLF-"
+      "D8ftu06SgArBXwQ65eUFmrGHcAAdPjQlbu2f6gYNawbpxbI3pTaSfvbCnT2rGiJe7ONP7qIe"
+      "ovJRKTJ3YNhIIvDgldl5rjHadVNp6RvJvBQ0K3JWhbeoadQsPfPTTv09R-"
+      "tMq96CkpqTDMrqEnlz3ij94s4mNw6jJU83rHJeZsOtG6tN-D69LrCvtZWWLSGHPlC_"
+      "XfyNjPF5aEu4Ty612SiGpJceUfx0xg0mp2WEHG4dMawwQZmYjSXJ4Q2qTzRqaTgMqlknyl6T"
+      "YukWUT2O9sLzkXODXXTfCSgaQ-glg2GbpktYWMVugE7gMbjrP2XJgdCS-"
+      "wQiI3VChUTQvFdSBg2_fNljIboWKzA8l8_"
+      "4M7lwilfBE4egom8UlCdT1xOtVZdTmIK5ZzbJqUCCWP8bkPKDnxFKbMiOP069g7a9sVsn7QI"
+      "lbHmAUrXO2mzy1Us6MCouxT_6WbHTUD8KNIFq-5fc-2aDblk4GnkhrMC71jM9qNLTg",
+    .senderPrivKey = "8f7XF7DYNdKbnk5PTPh9DLmF4rxE_9bUN6TnShgEVYc",
+    .recvPubKey = "BAki8XztfQnUVRAt2QwxRs4zL0XSNJZG_mTKu39BIwO-"
+                  "XCNTmv9cMHLdhakLdpLhliIJOe63Pg7yR1kysc2pFsc",
+    .authSecret = "0_gi9Ix0dBldpk14X0CPJg",
+    .salt = "dxBnSx7NC_en0yWI6ulTnA",
+    .plaintext = "I am the very model of a modern Major-General.",
+    .rs = 4,
+    .pad = 0,
+  },
 };
 
 static webpush_invalid_decrypt_test_t webpush_invalid_decrypt_tests[] = {{
