@@ -58,6 +58,9 @@ void
 test_webpush_aesgcm_encrypt();
 
 void
+test_webpush_aesgcm_decrypt_invalid_ciphertexts();
+
+void
 test_webpush_aes128gcm_encrypt();
 
 void

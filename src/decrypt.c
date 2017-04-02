@@ -1,4 +1,5 @@
 #include "ece/keys.h"
+#include "ece/trailer.h"
 
 #include <string.h>
 
@@ -138,7 +139,7 @@ ece_webpush_decrypt(const uint8_t* rawRecvPrivKey, size_t rawRecvPrivKeyLen,
                     const uint8_t* salt, size_t saltLen,
                     const uint8_t* rawSenderPubKey, size_t rawSenderPubKeyLen,
                     uint32_t rs, const uint8_t* ciphertext,
-                    size_t ciphertextLen,
+                    size_t ciphertextLen, needs_trailer_t needsTrailer,
                     derive_key_and_nonce_t deriveKeyAndNonce,
                     max_decrypted_length_t maxDecryptedLen, unpad_t unpad,
                     uint8_t* plaintext, size_t* plaintextLen) {
@@ -157,6 +158,12 @@ ece_webpush_decrypt(const uint8_t* rawRecvPrivKey, size_t rawRecvPrivKeyLen,
   }
   if (!ciphertextLen) {
     err = ECE_ERROR_ZERO_CIPHERTEXT;
+    goto end;
+  }
+  if (needsTrailer(rs, ciphertextLen)) {
+    // If we're missing a trailing block, the ciphertext is truncated. This only
+    // applies to "aesgcm".
+    err = ECE_ERROR_DECRYPT_TRUNCATED;
     goto end;
   }
 
@@ -347,12 +354,12 @@ ece_webpush_aes128gcm_decrypt(const uint8_t* rawRecvPrivKey,
   if (err) {
     return err;
   }
-  return ece_webpush_decrypt(rawRecvPrivKey, rawRecvPrivKeyLen, authSecret,
-                             authSecretLen, salt, saltLen, rawSenderPubKey,
-                             rawSenderPubKeyLen, rs, ciphertext, ciphertextLen,
-                             &ece_webpush_aes128gcm_derive_key_and_nonce,
-                             &ece_aes128gcm_max_decrypted_length,
-                             &ece_aes128gcm_unpad, plaintext, plaintextLen);
+  return ece_webpush_decrypt(
+    rawRecvPrivKey, rawRecvPrivKeyLen, authSecret, authSecretLen, salt, saltLen,
+    rawSenderPubKey, rawSenderPubKeyLen, rs, ciphertext, ciphertextLen,
+    &ece_aes128gcm_needs_trailer, &ece_webpush_aes128gcm_derive_key_and_nonce,
+    &ece_aes128gcm_max_decrypted_length, &ece_aes128gcm_unpad, plaintext,
+    plaintextLen);
 }
 
 int
@@ -375,7 +382,7 @@ ece_webpush_aesgcm_decrypt(const uint8_t* rawRecvPrivKey,
   return ece_webpush_decrypt(
     rawRecvPrivKey, rawRecvPrivKeyLen, authSecret, authSecretLen, salt,
     ECE_SALT_LENGTH, rawSenderPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs,
-    ciphertext, ciphertextLen, &ece_webpush_aesgcm_derive_key_and_nonce,
-    &ece_aesgcm_max_decrypted_length, &ece_aesgcm_unpad, plaintext,
-    plaintextLen);
+    ciphertext, ciphertextLen, &ece_aesgcm_needs_trailer,
+    &ece_webpush_aesgcm_derive_key_and_nonce, &ece_aesgcm_max_decrypted_length,
+    &ece_aesgcm_unpad, plaintext, plaintextLen);
 }

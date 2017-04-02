@@ -16,7 +16,8 @@ set(ECE_SOURCES
   src/encrypt.c
   src/decrypt.c
   src/keys.c
-  src/params.c)
+  src/params.c
+  src/trailer.c)
 add_library(ece ${ECE_SOURCES})
 set_target_properties(ece PROPERTIES
   OUTPUT_NAME ece

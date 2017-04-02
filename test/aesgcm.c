@@ -31,6 +31,16 @@ typedef struct valid_ciphertext_test_s {
   const char* encryption;
 } valid_ciphertext_test_t;
 
+typedef struct webpush_invalid_decrypt_test_s {
+  const char* desc;
+  const char* recvPrivKey;
+  const char* authSecret;
+  const char* ciphertext;
+  const char* cryptoKey;
+  const char* encryption;
+  int err;
+} webpush_invalid_decrypt_test_t;
+
 static valid_param_test_t valid_param_tests[] = {
   {
     .desc = "Multiple keys in Crypto-Key header",
@@ -305,6 +315,19 @@ static webpush_encrypt_test_t webpush_aesgcm_encrypt_tests[] = {
   },
 };
 
+static webpush_invalid_decrypt_test_t webpush_invalid_decrypt_tests[] = {{
+  .desc = "Truncated input",
+  .recvPrivKey = "2bu4paOAZbL2ef1u-wTzONuTIcDPc00o0zUJgg46XTc",
+  .authSecret = "QoDi0u6vcslIVJKiouXMXw",
+  // "O hai". The ciphertext is exactly `rs + 16`, without a trailer.
+  .ciphertext = "YG4F-b06y590hRlnSsw_vuOw62V9Iz8",
+  .cryptoKey = "dh=BD_"
+               "bsTUpxBMvSv8eksith3vijMLj44D4jhJjO51y7wK1ytbUlsyYBBYYyB5AAe5bnR"
+               "EA_WipTgemDVz00LiWcfM",
+  .encryption = "salt=xKWvs_jWWeg4KOsot_uBhA; rs=7",
+  .err = ECE_ERROR_DECRYPT_TRUNCATED,
+}};
+
 void
 test_aesgcm_valid_crypto_params() {
   size_t length = sizeof(valid_param_tests) / sizeof(valid_param_test_t);
@@ -392,6 +415,55 @@ test_aesgcm_valid_ciphertexts() {
                t.desc, expectedPlaintextLen);
     ece_assert(!memcmp(plaintext, t.plaintext, plaintextLen),
                "Wrong plaintext for `%s`", t.desc);
+
+    free(ciphertext);
+    free(plaintext);
+  }
+}
+
+void
+test_webpush_aesgcm_decrypt_invalid_ciphertexts() {
+  size_t tests = sizeof(webpush_invalid_decrypt_tests) /
+                 sizeof(webpush_invalid_decrypt_test_t);
+  for (size_t i = 0; i < tests; i++) {
+    webpush_invalid_decrypt_test_t t = webpush_invalid_decrypt_tests[i];
+
+    uint8_t rawRecvPrivKey[32];
+    size_t decodedLen =
+      ece_base64url_decode(t.recvPrivKey, strlen(t.recvPrivKey),
+                           ECE_BASE64URL_REJECT_PADDING, rawRecvPrivKey, 32);
+    ece_assert(decodedLen, "Want decoded receiver private key for `%s`",
+               t.desc);
+
+    uint8_t authSecret[16];
+    decodedLen =
+      ece_base64url_decode(t.authSecret, strlen(t.authSecret),
+                           ECE_BASE64URL_REJECT_PADDING, authSecret, 16);
+    ece_assert(decodedLen, "Want decoded auth secret length for `%s`", t.desc);
+
+    size_t ciphertextBase64Len = strlen(t.ciphertext);
+    decodedLen = ece_base64url_decode(t.ciphertext, ciphertextBase64Len,
+                                      ECE_BASE64URL_REJECT_PADDING, NULL, 0);
+    ece_assert(decodedLen, "Want decoded ciphertext length for `%s`", t.desc);
+    uint8_t* ciphertext = calloc(decodedLen, sizeof(uint8_t));
+    ece_assert(ciphertext, "Want ciphertext buffer length %zu for `%s`",
+               decodedLen, t.desc);
+    decodedLen = ece_base64url_decode(t.ciphertext, ciphertextBase64Len,
+                                      ECE_BASE64URL_REJECT_PADDING, ciphertext,
+                                      decodedLen);
+    ece_assert(decodedLen, "Want decoded ciphertext for `%s`", t.desc);
+
+    size_t plaintextLen = ece_aesgcm_plaintext_max_length(decodedLen);
+    ece_assert(plaintextLen, "Want maximum plaintext length for `%s`", t.desc);
+    uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
+    ece_assert(plaintext, "Want plaintext buffer length %zu for `%s`",
+               plaintextLen, t.desc);
+
+    int err = ece_webpush_aesgcm_decrypt(rawRecvPrivKey, 32, authSecret, 16,
+                                         t.cryptoKey, t.encryption, ciphertext,
+                                         decodedLen, plaintext, &plaintextLen);
+    ece_assert(err == t.err, "Got %d decrypting ciphertext for `%s`; want %d",
+               err, t.desc, t.err);
 
     free(ciphertext);
     free(plaintext);

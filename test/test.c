@@ -10,6 +10,7 @@ main() {
   test_aesgcm_valid_crypto_params();
   test_aesgcm_invalid_crypto_params();
   test_aesgcm_valid_ciphertexts();
+  test_webpush_aesgcm_decrypt_invalid_ciphertexts();
   test_webpush_aesgcm_encrypt();
 
   test_webpush_aes128gcm_encrypt();

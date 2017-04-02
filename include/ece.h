@@ -41,6 +41,7 @@ extern "C" {
 #define ECE_ERROR_ENCRYPT_PADDING -19
 #define ECE_ERROR_INVALID_AUTH_SECRET -20
 #define ECE_ERROR_GENERATE_KEYS -21
+#define ECE_ERROR_DECRYPT_TRUNCATED -22
 
 // Annotates a variable or parameter as unused to avoid compiler warnings.
 #define ECE_UNUSED(x) (void) (x)

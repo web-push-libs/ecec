@@ -1,4 +1,5 @@
 #include "ece/keys.h"
+#include "ece/trailer.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -16,8 +17,6 @@ typedef int (*encrypt_block_t)(EVP_CIPHER_CTX* ctx, const uint8_t* key,
                                const uint8_t* iv, const uint8_t* plaintext,
                                size_t plaintextLen, uint8_t* pad, size_t padLen,
                                bool lastRecord, uint8_t* record);
-
-typedef bool (*needs_trailer_t)(uint32_t rs, size_t ciphertextLen);
 
 // Writes an unsigned 32-bit integer in network byte order.
 static inline void
@@ -75,19 +74,6 @@ ece_ciphertext_max_length(uint32_t rs, size_t padSize, size_t padLen,
   // The total number of encrypted records.
   size_t numRecords = (dataLen / dataPerBlock) + 1;
   return dataLen + (overhead * numRecords);
-}
-
-// Indicates if an "aesgcm" ciphertext is a multiple of the record size, and
-// needs a padding-only trailing block to prevent truncation attacks.
-static bool
-ece_aesgcm_needs_trailer(uint32_t rs, size_t ciphertextLen) {
-  return !(ciphertextLen % rs);
-}
-
-// "aes128gcm" uses a padding scheme that doesn't need a trailer.
-static bool
-ece_aes128gcm_needs_trailer() {
-  return false;
 }
 
 // Encrypts an "aes128gcm" block into `record`.
@@ -282,10 +268,11 @@ ece_webpush_encrypt_plaintext(
       ciphertextEnd = maxCiphertextLen;
     }
 
-    // We've reached the last record when the padding and plaintext are
-    // exhausted, and we don't need to write an empty trailing block.
-    lastRecord =
-      !padLen && plaintextExhausted && !needsTrailer(rs, ciphertextEnd);
+    if (!padLen && plaintextExhausted && !needsTrailer(rs, ciphertextEnd)) {
+      // We've reached the last record when the padding and plaintext are
+      // exhausted, and we don't need to write an empty trailing block.
+      lastRecord = true;
+    }
 
     if (!lastRecord && blockLen < dataPerBlock) {
       // We have padding left, but not enough plaintext to form a full record.
