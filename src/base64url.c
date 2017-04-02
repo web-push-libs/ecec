@@ -39,11 +39,6 @@ ece_base64url_decode(const char* base64, size_t base64Len,
     return 0;
   }
 
-  // Check for overflow.
-  if (base64Len > SIZE_MAX / 3) {
-    return 0;
-  }
-
   // Determine whether to check for and ignore trailing padding.
   bool maybePadded = false;
   switch (paddingPolicy) {
