@@ -10,14 +10,12 @@
 #define ECE_AES128GCM_PAD_SIZE 1
 #define ECE_AESGCM_PAD_SIZE 2
 
-typedef size_t (*min_block_pad_length_t)(size_t padLen,
-                                         size_t plaintextPerBlock);
+typedef size_t (*min_block_pad_length_t)(size_t padLen, size_t dataPerBlock);
 
 typedef int (*encrypt_block_t)(EVP_CIPHER_CTX* ctx, const uint8_t* key,
-                               const uint8_t* iv, const uint8_t* block,
-                               size_t blockLen, uint8_t* pad,
-                               size_t blockPadLen, bool isLastRecord,
-                               uint8_t* record);
+                               const uint8_t* iv, const uint8_t* plaintext,
+                               size_t plaintextLen, uint8_t* pad, size_t padLen,
+                               bool lastRecord, uint8_t* record);
 
 typedef bool (*needs_trailer_t)(uint32_t rs, size_t ciphertextLen);
 
@@ -40,9 +38,22 @@ ece_write_uint16_be(uint8_t* bytes, uint16_t value) {
 // Calculates the padding so that the block contains at least one plaintext
 // byte.
 static inline size_t
-ece_min_block_pad_length(size_t padLen, size_t plaintextPerBlock) {
-  size_t blockPadLen = plaintextPerBlock - 1;
+ece_min_block_pad_length(size_t padLen, size_t dataPerBlock) {
+  size_t blockPadLen = dataPerBlock - 1;
+  if (padLen && !blockPadLen) {
+    // If `dataPerBlock` is 1, we can only include 1 byte of data, so write
+    // the padding first.
+    blockPadLen++;
+  }
   return blockPadLen > padLen ? padLen : blockPadLen;
+}
+
+// Calculates the padding for an "aesgcm" block. We still want one plaintext
+// byte per block, but the padding length must fit into a `uint16_t`.
+static size_t
+ece_aesgcm_min_block_pad_length(size_t padLen, size_t dataPerBlock) {
+  size_t blockPadLen = ece_min_block_pad_length(padLen, dataPerBlock);
+  return blockPadLen > UINT16_MAX ? UINT16_MAX : blockPadLen;
 }
 
 // Calculates the maximum length of an encrypted ciphertext. This does not
@@ -66,17 +77,6 @@ ece_ciphertext_max_length(uint32_t rs, size_t padSize, size_t padLen,
   return dataLen + (overhead * numRecords);
 }
 
-// Calculates the padding for an "aesgcm" block. We still want one plaintext
-// byte per block, but the padding length must fit into a `uint16_t`.
-static size_t
-ece_aesgcm_min_block_pad_length(size_t padLen, size_t plaintextPerBlock) {
-  size_t blockPadLen = ece_min_block_pad_length(padLen, plaintextPerBlock);
-  if (blockPadLen > UINT16_MAX) {
-    return UINT16_MAX;
-  }
-  return blockPadLen;
-}
-
 // Indicates if an "aesgcm" ciphertext is a multiple of the record size, and
 // needs a padding-only trailing block to prevent truncation attacks.
 static bool
@@ -90,29 +90,35 @@ ece_aes128gcm_needs_trailer() {
   return false;
 }
 
-// Encrypts an "aes128gcm" plaintext block with optional padding.
+// Encrypts an "aes128gcm" block into `record`.
 static int
 ece_aes128gcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* key,
-                            const uint8_t* iv, const uint8_t* block,
-                            size_t blockLen, uint8_t* pad, size_t blockPadLen,
-                            bool isLastRecord, uint8_t* record) {
+                            const uint8_t* iv, const uint8_t* plaintext,
+                            size_t plaintextLen, uint8_t* pad, size_t padLen,
+                            bool lastRecord, uint8_t* record) {
   if (EVP_EncryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key, iv) <= 0) {
     return ECE_ERROR_ENCRYPT;
   }
 
   int chunkLen = -1;
+  size_t offset = 0;
 
-  // The data block precedes the padding.
-  if (EVP_EncryptUpdate(ctx, record, &chunkLen, block, (int) blockLen) <= 0) {
+  // The plaintext block precedes the padding.
+  if (EVP_EncryptUpdate(ctx, record, &chunkLen, plaintext,
+                        (int) plaintextLen) <= 0) {
     return ECE_ERROR_ENCRYPT;
   }
+  offset += plaintextLen;
+
   // The padding block comprises the delimiter, followed by zeros up to the end
-  // of the block. `blockPadLen + 1` ensures we always write the delimiter.
-  pad[0] = isLastRecord ? 2 : 1;
-  if (EVP_EncryptUpdate(ctx, &record[blockLen], &chunkLen, pad,
-                        (int) (blockPadLen + ECE_AES128GCM_PAD_SIZE)) <= 0) {
+  // of the block.
+  pad[0] = lastRecord ? 2 : 1;
+  if (EVP_EncryptUpdate(ctx, &record[offset], &chunkLen, pad,
+                        (int) (padLen + ECE_AES128GCM_PAD_SIZE)) <= 0) {
     return ECE_ERROR_ENCRYPT;
   }
+  offset += padLen + ECE_AES128GCM_PAD_SIZE;
+
   // OpenSSL requires us to finalize the encryption, but, since we're using a
   // stream cipher, finalization shouldn't write out any bytes.
   if (EVP_EncryptFinal_ex(ctx, NULL, &chunkLen) <= 0) {
@@ -120,9 +126,8 @@ ece_aes128gcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* key,
   }
 
   // Append the authentication tag.
-  if (EVP_CIPHER_CTX_ctrl(
-        ctx, EVP_CTRL_GCM_GET_TAG, ECE_TAG_LENGTH,
-        &record[blockLen + blockPadLen + ECE_AES128GCM_PAD_SIZE]) <= 0) {
+  if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, ECE_TAG_LENGTH,
+                          &record[offset]) <= 0) {
     return ECE_ERROR_ENCRYPT;
   }
 
@@ -130,40 +135,44 @@ ece_aes128gcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* key,
   return ECE_OK;
 }
 
-// Encrypts an "aesgcm" plaintext block with optional padding.
+// Encrypts an "aesgcm" block into `record`.
 static int
 ece_aesgcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* key,
-                         const uint8_t* iv, const uint8_t* block,
-                         size_t blockLen, uint8_t* pad, size_t blockPadLen,
-                         bool isLastRecord, uint8_t* record) {
-  ECE_UNUSED(isLastRecord);
+                         const uint8_t* iv, const uint8_t* plaintext,
+                         size_t plaintextLen, uint8_t* pad, size_t padLen,
+                         bool lastRecord, uint8_t* record) {
+  ECE_UNUSED(lastRecord);
 
   if (EVP_EncryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key, iv) <= 0) {
     return ECE_ERROR_ENCRYPT;
   }
 
   int chunkLen = -1;
+  size_t offset = 0;
 
   // The padding block comprises the padding length as a 16-bit integer,
-  // followed by that many zeros. We've already checked that the length fits
-  // into a `uint16_t`, so this cast is safe.
-  ece_write_uint16_be(pad, (uint16_t) blockPadLen);
+  // followed by that many zeros. We checked that the length fits into a
+  // `uint16_t` in `ece_aesgcm_min_block_pad_length`, so this cast is safe.
+  ece_write_uint16_be(pad, (uint16_t) padLen);
   if (EVP_EncryptUpdate(ctx, record, &chunkLen, pad,
-                        (int) (blockPadLen + ECE_AESGCM_PAD_SIZE)) <= 0) {
+                        (int) (padLen + ECE_AESGCM_PAD_SIZE)) <= 0) {
     return ECE_ERROR_ENCRYPT;
   }
-  // The data block follows the padding.
-  if (EVP_EncryptUpdate(ctx, &record[blockPadLen + ECE_AESGCM_PAD_SIZE],
-                        &chunkLen, block, (int) blockLen) <= 0) {
+  offset += padLen + ECE_AESGCM_PAD_SIZE;
+
+  // The plaintext block follows the padding.
+  if (EVP_EncryptUpdate(ctx, &record[offset], &chunkLen, plaintext,
+                        (int) plaintextLen) <= 0) {
     return ECE_ERROR_ENCRYPT;
   }
+  offset += plaintextLen;
+
   if (EVP_EncryptFinal_ex(ctx, NULL, &chunkLen) <= 0) {
     return ECE_ERROR_ENCRYPT;
   }
 
-  if (EVP_CIPHER_CTX_ctrl(
-        ctx, EVP_CTRL_GCM_GET_TAG, ECE_TAG_LENGTH,
-        &record[blockPadLen + ECE_AESGCM_PAD_SIZE + blockLen]) <= 0) {
+  if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, ECE_TAG_LENGTH,
+                          &record[offset]) <= 0) {
     return ECE_ERROR_ENCRYPT;
   }
 
@@ -203,13 +212,13 @@ ece_webpush_encrypt_plaintext(
 
   // Make sure the ciphertext buffer is large enough to hold the header and
   // ciphertext.
-  size_t maxRecordEnd =
+  size_t maxCiphertextLen =
     ece_ciphertext_max_length(rs, padSize, padLen, plaintextLen);
-  if (!maxRecordEnd) {
+  if (!maxCiphertextLen) {
     err = ECE_ERROR_INVALID_RS;
     goto end;
   }
-  if (*ciphertextLen < maxRecordEnd) {
+  if (*ciphertextLen < maxCiphertextLen) {
     err = ECE_ERROR_OUT_OF_MEMORY;
     goto end;
   }
@@ -236,65 +245,75 @@ ece_webpush_encrypt_plaintext(
     goto end;
   }
 
-  bool isLastRecord = false;
   size_t overhead = padSize + ECE_TAG_LENGTH;
-  size_t plaintextPerBlock = rs - overhead;
-  size_t blockStart = 0;
+
+  // The maximum amount of plaintext and padding that will fit into a block.
+  // The last block can be smaller.
+  size_t dataPerBlock = rs - overhead;
+
+  // The offset at which to start reading the plaintext.
+  size_t plaintextStart = 0;
+
+  // The offset at which to start writing the ciphertext.
+  size_t ciphertextStart = 0;
+
+  // The record sequence number, used to generate the IV.
   size_t counter = 0;
-  size_t recordStart = 0;
-  while (!isLastRecord) {
-    size_t blockPadLen = minBlockPadLen(padLen, plaintextPerBlock);
-    if (padLen && !blockPadLen) {
-      // If our record size is `overhead + 1`, we can only include
-      // one byte of data, so write the padding first.
-      blockPadLen++;
-    }
+
+  bool lastRecord = false;
+  while (!lastRecord) {
+    size_t blockPadLen = minBlockPadLen(padLen, dataPerBlock);
     padLen -= blockPadLen;
 
-    size_t blockEnd = blockStart + plaintextPerBlock - blockPadLen;
-    if (blockEnd >= plaintextLen) {
-      blockEnd = plaintextLen;
-      if (!padLen) {
-        // We've reached the last record when the plaintext and padding are
-        // exhausted.
-        isLastRecord = true;
-      }
+    // Fill the rest of the block with plaintext.
+    size_t plaintextEnd = plaintextStart + dataPerBlock - blockPadLen;
+    bool plaintextExhausted = false;
+    if (plaintextEnd >= plaintextLen) {
+      plaintextEnd = plaintextLen;
+      plaintextExhausted = true;
     }
-    size_t blockLen = blockEnd - blockStart;
+    size_t blockPlaintextLen = plaintextEnd - plaintextStart;
+
+    // The full length of the plaintext and padding.
+    size_t blockLen = blockPlaintextLen + blockPadLen;
+
+    size_t ciphertextEnd = ciphertextStart + blockLen + overhead;
+    if (ciphertextEnd > maxCiphertextLen) {
+      ciphertextEnd = maxCiphertextLen;
+    }
+
+    // We've reached the last record when the padding and plaintext are
+    // exhausted, and we don't need to write an empty trailing block.
+    lastRecord =
+      !padLen && plaintextExhausted && !needsTrailer(rs, ciphertextEnd);
+
+    if (!lastRecord && blockLen < dataPerBlock) {
+      // We have padding left, but not enough plaintext to form a full record.
+      // Writing trailing padding-only records will still leak size information,
+      // so we force the caller to pick a smaller padding length.
+      err = ECE_ERROR_ENCRYPT_PADDING;
+      goto end;
+    }
 
     // Generate the IV for this record using the nonce.
     uint8_t iv[ECE_NONCE_LENGTH];
     ece_generate_iv(nonce, counter, iv);
 
     // Encrypt and pad the block.
-    err = encryptBlock(ctx, key, iv, &plaintext[blockStart], blockLen, pad,
-                       blockPadLen, isLastRecord, &ciphertext[recordStart]);
+    err =
+      encryptBlock(ctx, key, iv, &plaintext[plaintextStart], blockPlaintextLen,
+                   pad, blockPadLen, lastRecord, &ciphertext[ciphertextStart]);
     if (err) {
       goto end;
     }
 
-    size_t recordEnd = recordStart + blockLen + blockPadLen + overhead;
-    if (recordEnd >= maxRecordEnd) {
-      recordEnd = maxRecordEnd;
-    }
-    blockStart = blockEnd;
-    recordStart = recordEnd;
+    plaintextStart = plaintextEnd;
+    ciphertextStart = ciphertextEnd;
     counter++;
   }
 
-  // Add a padding-only trailer for "aesgcm" if needed.
-  if (needsTrailer(rs, recordStart)) {
-    uint8_t iv[ECE_NONCE_LENGTH];
-    ece_generate_iv(nonce, counter, iv);
-    // This means we'll call `encryptBlock` twice with `isLastRecord = true`,
-    // but that's OK because "aesgcm" doesn't use `isLastRecord`.
-    err = encryptBlock(ctx, key, iv, NULL, 0, pad, 0, true,
-                       &ciphertext[recordStart]);
-    recordStart += overhead;
-  }
-
   // Finally, set the actual ciphertext length.
-  *ciphertextLen = recordStart;
+  *ciphertextLen = ciphertextStart;
 
 end:
   EVP_CIPHER_CTX_free(ctx);
@@ -309,6 +328,7 @@ ece_webpush_aes128gcm_encrypt_plaintext(
   size_t authSecretLen, const uint8_t* salt, size_t saltLen, uint32_t rs,
   size_t padLen, const uint8_t* plaintext, size_t plaintextLen,
   uint8_t* payload, size_t* payloadLen) {
+
   size_t headerLen =
     ECE_AES128GCM_HEADER_LENGTH + ECE_WEBPUSH_PUBLIC_KEY_LENGTH;
   if (*payloadLen < headerLen) {
