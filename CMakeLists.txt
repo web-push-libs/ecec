@@ -40,9 +40,12 @@ target_include_directories(ece-decrypt PRIVATE tools/ece-decrypt)
 target_link_libraries(ece-decrypt PRIVATE ece)
 
 set(ECE_TEST_SOURCES
-  test/aes128gcm.c
-  test/aesgcm.c
+  test/decrypt/aes128gcm.c
+  test/decrypt/aesgcm.c
+  test/encrypt/aes128gcm.c
+  test/encrypt/aesgcm.c
   test/base64url.c
+  test/params.c
   test/test.c)
 add_executable(ece-test ${ECE_TEST_SOURCES})
 set_target_properties(ece-test PROPERTIES EXCLUDE_FROM_ALL 1)

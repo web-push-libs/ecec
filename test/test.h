@@ -13,61 +13,34 @@
     }                                                                          \
   } while (0)
 
-typedef struct webpush_encrypt_test_s {
-  const char* desc;
-  const char* payload;
-  const char* senderPrivKey;
-  const char* recvPubKey;
-  const char* authSecret;
-  const char* salt;
-  const char* plaintext;
-  uint32_t rs;
-  uint8_t pad;
-} webpush_encrypt_test_t;
-
-typedef size_t (*webpush_payload_max_len_t)(uint32_t rs, size_t padLen,
-                                            size_t plaintextLen);
-
-typedef int (*webpush_encrypt_with_keys_t)(
-  const uint8_t* rawSenderPrivKey, size_t rawSenderPrivKeyLen,
-  const uint8_t* authSecret, size_t authSecretLen, const uint8_t* salt,
-  size_t saltLen, const uint8_t* rawRecvPubKey, size_t rawRecvPubKeyLen,
-  uint32_t rs, size_t padLen, const uint8_t* plaintext, size_t plaintextLen,
-  uint8_t* payload, size_t* payloadLen);
-
 // Logs an assertion failure to standard error.
 void
 ece_log(const char* funcName, int line, const char* expr, const char* format,
         ...);
 
 void
-test_webpush_encrypt(webpush_encrypt_test_t* t,
-                     webpush_payload_max_len_t maxPayloadLen,
-                     webpush_encrypt_with_keys_t encryptWithKeys);
+test_webpush_aesgcm_params_ok();
 
 void
-test_aesgcm_valid_crypto_params();
+test_webpush_aesgcm_params_err();
 
 void
-test_aesgcm_invalid_crypto_params();
+test_webpush_aesgcm_encrypt_ok();
 
 void
-test_aesgcm_valid_ciphertexts();
+test_webpush_aesgcm_decrypt_ok();
 
 void
-test_webpush_aesgcm_encrypt();
+test_webpush_aesgcm_decrypt_err();
 
 void
-test_webpush_aesgcm_decrypt_invalid_ciphertexts();
+test_webpush_aes128gcm_encrypt_ok();
 
 void
-test_webpush_aes128gcm_encrypt();
+test_webpush_aes128gcm_decrypt_ok();
 
 void
-test_webpush_aes128gcm_decrypt_valid_payloads();
-
-void
-test_aes128gcm_decrypt_invalid_payloads();
+test_aes128gcm_decrypt_err();
 
 void
 test_base64url_decode();
