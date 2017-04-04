@@ -45,6 +45,7 @@ set(ECE_TEST_SOURCES
   test/encrypt/aes128gcm.c
   test/encrypt/aesgcm.c
   test/base64url.c
+  test/e2e.c
   test/params.c
   test/test.c)
 add_executable(ece-test ${ECE_TEST_SOURCES})

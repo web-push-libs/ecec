@@ -43,4 +43,7 @@ void
 test_aes128gcm_decrypt_err();
 
 void
+test_webpush_aes128gcm_e2e();
+
+void
 test_base64url_decode();
