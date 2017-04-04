@@ -11,7 +11,7 @@ typedef struct webpush_aesgcm_decrypt_ok_test_s {
   const char* cryptoKey;
   const char* encryption;
   size_t ciphertextLen;
-  size_t plaintextMaxLen;
+  size_t maxPlaintextLen;
   size_t plaintextLen;
 } webpush_aesgcm_decrypt_ok_test_t;
 
@@ -22,7 +22,7 @@ typedef struct webpush_aesgcm_decrypt_err_test_s {
   const char* ciphertext;
   const char* cryptoKey;
   const char* encryption;
-  size_t plaintextMaxLen;
+  size_t maxPlaintextLen;
   size_t ciphertextLen;
   int err;
 } webpush_aesgcm_decrypt_err_test_t;
@@ -44,7 +44,7 @@ static webpush_aesgcm_decrypt_ok_test_t webpush_aesgcm_decrypt_ok_tests[] = {
                  "DKiLh4LNKPtj0BOXGdr-IQ-QP82Wjo",
     .encryption = "salt=zCU18Rw3A5aB_Xi-vfixmA; rs=24",
     .ciphertextLen = 30,
-    .plaintextMaxLen = 30,
+    .maxPlaintextLen = 30,
     .plaintextLen = 12,
   },
   {
@@ -69,7 +69,7 @@ static webpush_aesgcm_decrypt_ok_test_t webpush_aesgcm_decrypt_ok_tests[] = {
                  "HBlLpkjgCpjPL5c-GL9uBGIfa_fhGNKKFhXz1k9Kyens2ZpQ",
     .encryption = "salt=ZFhzj0S-n29g9P2p4-I7tA; rs=8",
     .ciphertextLen = 143,
-    .plaintextMaxLen = 143,
+    .maxPlaintextLen = 143,
     .plaintextLen = 19,
   },
   {
@@ -107,7 +107,7 @@ static webpush_aesgcm_decrypt_ok_test_t webpush_aesgcm_decrypt_ok_tests[] = {
                  "fYHBP4ObxwJNl56bk",
     .encryption = "salt=5LIDBXbvkBvvb7ZdD-T4PQ; rs=3",
     .ciphertextLen = 341,
-    .plaintextMaxLen = 341,
+    .maxPlaintextLen = 341,
     .plaintextLen = 17,
   },
   {
@@ -127,7 +127,7 @@ static webpush_aesgcm_decrypt_ok_test_t webpush_aesgcm_decrypt_ok_tests[] = {
                  "aqxYaQ1G8BqkXCJ6DPpDrWtdWj_mugHU\"",
     .encryption = "keyid=\"dhkey\"; salt=\"lngarbyKfMoi9Z75xYXmkg\"",
     .ciphertextLen = 33,
-    .plaintextMaxLen = 33,
+    .maxPlaintextLen = 33,
     .plaintextLen = 15,
   },
 };
@@ -147,7 +147,7 @@ static webpush_aesgcm_decrypt_err_test_t webpush_aesgcm_decrypt_err_tests[] = {{
                "EA_WipTgemDVz00LiWcfM",
   .encryption = "salt=xKWvs_jWWeg4KOsot_uBhA; rs=7",
   .ciphertextLen = 23,
-  .plaintextMaxLen = 23,
+  .maxPlaintextLen = 23,
   .err = ECE_ERROR_DECRYPT_TRUNCATED,
 }};
 
@@ -159,9 +159,9 @@ test_webpush_aesgcm_decrypt_ok() {
     webpush_aesgcm_decrypt_ok_test_t t = webpush_aesgcm_decrypt_ok_tests[i];
 
     size_t plaintextLen = ece_aesgcm_plaintext_max_length(t.ciphertextLen);
-    ece_assert(plaintextLen == t.plaintextMaxLen,
+    ece_assert(plaintextLen == t.maxPlaintextLen,
                "Got plaintext max length %zu for `%s`; want %zu", plaintextLen,
-               t.desc, t.plaintextMaxLen);
+               t.desc, t.maxPlaintextLen);
 
     uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
 
@@ -189,9 +189,9 @@ test_webpush_aesgcm_decrypt_err() {
     webpush_aesgcm_decrypt_err_test_t t = webpush_aesgcm_decrypt_err_tests[i];
 
     size_t plaintextLen = ece_aesgcm_plaintext_max_length(t.ciphertextLen);
-    ece_assert(plaintextLen == t.plaintextMaxLen,
+    ece_assert(plaintextLen == t.maxPlaintextLen,
                "Got plaintext max length %zu for `%s`; want %zu", plaintextLen,
-               t.desc, t.plaintextMaxLen);
+               t.desc, t.maxPlaintextLen);
 
     uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
 

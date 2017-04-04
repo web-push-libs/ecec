@@ -10,7 +10,7 @@ typedef struct webpush_aesgcm_encrypt_ok_test_s {
   const char* authSecret;
   const char* salt;
   const char* plaintext;
-  size_t ciphertextMaxLen;
+  size_t maxCiphertextLen;
   size_t ciphertextLen;
   size_t plaintextLen;
   uint32_t rs;
@@ -35,7 +35,7 @@ static webpush_aesgcm_encrypt_ok_test_t webpush_aesgcm_encrypt_ok_tests[] = {
       "\x47\x6f\x6f\x20\x67\x6f\x6f\x20\x67\x27\x20\x6a\x6f\x6f\x62\x21",
     .salt = "\x96\x78\x1a\xad\xbc\x8a\x7c\xca\x22\xf5\x9e\xf9\xc5\x85\xe6\x92",
     .plaintext = "I am the walrus",
-    .ciphertextMaxLen = 33,
+    .maxCiphertextLen = 33,
     .ciphertextLen = 33,
     .plaintextLen = 15,
     .rs = 4096,
@@ -85,7 +85,7 @@ static webpush_aesgcm_encrypt_ok_test_t webpush_aesgcm_encrypt_ok_tests[] = {
       "\xd3\xf8\x22\xf4\x8c\x74\x74\x19\x5d\xa6\x4d\x78\x5f\x40\x8f\x26",
     .salt = "\x77\x10\x67\x4b\x1e\xcd\x0b\xf7\xa7\xd3\x25\x88\xea\xe9\x53\x9c",
     .plaintext = "I am the very model of a modern Major-General.",
-    .ciphertextMaxLen = 478,
+    .maxCiphertextLen = 478,
     .ciphertextLen = 478,
     .plaintextLen = 46,
     .rs = 4,
@@ -102,9 +102,9 @@ test_webpush_aesgcm_encrypt_ok() {
 
     size_t ciphertextLen =
       ece_aesgcm_ciphertext_max_length(t.rs, t.pad, t.plaintextLen);
-    ece_assert(ciphertextLen == t.ciphertextMaxLen,
+    ece_assert(ciphertextLen == t.maxCiphertextLen,
                "Got ciphertext max length %zu for `%s`; want %zu",
-               ciphertextLen, t.desc, t.ciphertextMaxLen);
+               ciphertextLen, t.desc, t.maxCiphertextLen);
 
     uint8_t* ciphertext = calloc(ciphertextLen, sizeof(uint8_t));
 

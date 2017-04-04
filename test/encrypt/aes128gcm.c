@@ -11,7 +11,7 @@ typedef struct webpush_aes128gcm_encrypt_ok_test_s {
   const char* salt;
   const char* plaintext;
   size_t plaintextLen;
-  size_t payloadMaxLen;
+  size_t maxPayloadLen;
   size_t payloadLen;
   uint32_t rs;
   uint8_t pad;
@@ -47,7 +47,7 @@ static webpush_aes128gcm_encrypt_ok_test_t
         "\x0c\x6b\xfa\xad\xad\x67\x95\x88\x03\x09\x2d\x45\x46\x76\xf3\x97",
       .plaintext = "When I grow up, I want to be a watermelon",
       .plaintextLen = 41,
-      .payloadMaxLen = 334,
+      .maxPayloadLen = 334,
       .payloadLen = 144,
       .rs = 4096,
       .pad = 0,
@@ -120,7 +120,7 @@ static webpush_aes128gcm_encrypt_ok_test_t
       .plaintext = "I am the very model of a modern Major-General, I've "
                    "information vegetable, animal, and mineral",
       .plaintextLen = 94,
-      .payloadMaxLen = 631,
+      .maxPayloadLen = 631,
       .payloadLen = 441,
       .rs = 24,
       .pad = 6,
@@ -263,7 +263,7 @@ static webpush_aes128gcm_encrypt_ok_test_t
         "\xe4\x98\x88\xd2\xb2\x8f\x27\x7f\x84\x7b\xc5\xde\x96\xf0\xf8\x1b",
       .plaintext = "Push the button, Frank!",
       .plaintextLen = 23,
-      .payloadMaxLen = 1265,
+      .maxPayloadLen = 1265,
       .payloadLen = 1058,
       .rs = 18,
       .pad = 31,
@@ -280,9 +280,9 @@ test_webpush_aes128gcm_encrypt_ok() {
 
     size_t payloadLen =
       ece_aes128gcm_payload_max_length(t.rs, t.pad, t.plaintextLen);
-    ece_assert(payloadLen == t.payloadMaxLen,
+    ece_assert(payloadLen == t.maxPayloadLen,
                "Got payload max length %zu for `%s`; want %zu", payloadLen,
-               t.desc, t.payloadMaxLen);
+               t.desc, t.maxPayloadLen);
 
     uint8_t* payload = calloc(payloadLen, sizeof(uint8_t));
 

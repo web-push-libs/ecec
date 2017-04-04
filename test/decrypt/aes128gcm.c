@@ -9,7 +9,7 @@ typedef struct webpush_aes128gcm_decrypt_ok_test_s {
   const char* authSecret;
   const char* payload;
   size_t payloadLen;
-  size_t plaintextMaxLen;
+  size_t maxPlaintextLen;
   size_t plaintextLen;
 } webpush_aes128gcm_decrypt_ok_test_t;
 
@@ -41,7 +41,7 @@ static webpush_aes128gcm_decrypt_ok_test_t
                  "\x47\x7c\x17"
                  "\x23\x1d\x95\xb9\x7a\x4f\x95\xdd",
       .payloadLen = 152,
-      .plaintextMaxLen = 18,
+      .maxPlaintextLen = 18,
       .plaintextLen = 15,
     },
     {
@@ -63,7 +63,7 @@ static webpush_aes128gcm_decrypt_ok_test_t
                  "\x5b\x2a\x2e\x05\x62\xd5\x58\x63\x56\x41\xec\x52\x81\x2c\x6c"
                  "\x8f\xf4\x2e\x95\xcc\xb8\x6b\xe7\xcd",
       .payloadLen = 144,
-      .plaintextMaxLen = 42,
+      .maxPlaintextLen = 42,
       .plaintextLen = 41,
     },
 };
@@ -73,7 +73,7 @@ typedef struct aes128gcm_err_decrypt_test_s {
   const char* ikm;
   const char* payload;
   size_t payloadLen;
-  size_t plaintextMaxLen;
+  size_t maxPlaintextLen;
   int err;
 } aes128gcm_err_decrypt_test_t;
 
@@ -84,7 +84,7 @@ static aes128gcm_err_decrypt_test_t aes128gcm_err_decrypt_tests[] = {
     .payload = "\x76\xf9\x1d\x48\x4e\x84\x91\xda\x55\xc5\xf7\xbf\xe6\xd3\x3e"
                "\x89\x00\x00\x00\x02\x00",
     .payloadLen = 21,
-    .plaintextMaxLen = 0,
+    .maxPlaintextLen = 0,
     .err = ECE_ERROR_INVALID_RS,
   },
   {
@@ -94,7 +94,7 @@ static aes128gcm_err_decrypt_test_t aes128gcm_err_decrypt_tests[] = {
                "\xda\x00\x00\x00\x20\x00\xbb\xc7\xb9\x65\x76\x0b\xf0\x66\x2b"
                "\x93\xf4\xe5\xd6\x94\xb7\x65\xf0\xcd\x15\x9b\x28\x01\xa5",
     .payloadLen = 44,
-    .plaintextMaxLen = 7,
+    .maxPlaintextLen = 7,
     .err = ECE_ERROR_ZERO_PLAINTEXT,
   },
   {
@@ -107,7 +107,7 @@ static aes128gcm_err_decrypt_test_t aes128gcm_err_decrypt_tests[] = {
                "\x2f\x48\xc1\xc3\x32\x04\xb1\x95\xb5\x4e\x9e\x70\xd4\x0e\x3c"
                "\xf3\xef\x0c\x67\x1b\xe0\x14\x49\x7e\xdc",
     .payloadLen = 85,
-    .plaintextMaxLen = 16,
+    .maxPlaintextLen = 16,
     .err = ECE_ERROR_DECRYPT_PADDING,
   },
   {
@@ -118,7 +118,7 @@ static aes128gcm_err_decrypt_test_t aes128gcm_err_decrypt_tests[] = {
                "\xb1\x08\x4a\x69\xe4\x50\x1b\x8d\x49\xdb\xc6\x79\x23\x4d\x47"
                "\xc2\x57\x16",
     .payloadLen = 48,
-    .plaintextMaxLen = 11,
+    .maxPlaintextLen = 11,
     .err = ECE_ERROR_DECRYPT_PADDING,
   },
   {
@@ -129,7 +129,7 @@ static aes128gcm_err_decrypt_test_t aes128gcm_err_decrypt_tests[] = {
                "\x2b\xbe\xaa\x44\xe0\xd6\x2e\x4b\xe5\xf9\x5d\x25\xe3\x86\x71"
                "\xe0\x7d",
     .payloadLen = 47,
-    .plaintextMaxLen = 10,
+    .maxPlaintextLen = 10,
     .err = ECE_ERROR_DECRYPT,
   },
 };
@@ -144,9 +144,9 @@ test_webpush_aes128gcm_decrypt_ok() {
 
     size_t plaintextLen = ece_aes128gcm_plaintext_max_length(
       (const uint8_t*) t.payload, t.payloadLen);
-    ece_assert(plaintextLen == t.plaintextMaxLen,
+    ece_assert(plaintextLen == t.maxPlaintextLen,
                "Got plaintext max length %zu for `%s`; want %zu", plaintextLen,
-               t.desc, t.plaintextMaxLen);
+               t.desc, t.maxPlaintextLen);
 
     uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
 
@@ -174,9 +174,9 @@ test_aes128gcm_decrypt_err() {
 
     size_t plaintextLen = ece_aes128gcm_plaintext_max_length(
       (const uint8_t*) t.payload, t.payloadLen);
-    ece_assert(plaintextLen == t.plaintextMaxLen,
+    ece_assert(plaintextLen == t.maxPlaintextLen,
                "Got plaintext max length %zu for `%s`; want %zu", plaintextLen,
-               t.desc, t.plaintextMaxLen);
+               t.desc, t.maxPlaintextLen);
 
     uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
 
