@@ -194,8 +194,7 @@ ece_aes128gcm_payload_max_length(uint32_t rs, size_t padLen,
 
 /*!
  * Encrypts a Web Push message using the "aes128gcm" scheme. This function
- * automatically
- * generates an ephemeral ECDH key pair and a random salt.
+ * automatically generates an ephemeral ECDH key pair and a random salt.
  *
  * \sa                         ece_aes128gcm_payload_max_length()
  *
@@ -245,15 +244,15 @@ ece_aes128gcm_encrypt(const uint8_t* rawRecvPubKey, size_t rawRecvPubKeyLen,
  * \param rawSenderPrivKey[in]    The sender private key.
  * \param rawSenderPrivKeyLen[in] The length of the sender private key. Must be
  *                                `ECE_WEBPUSH_PRIVATE_KEY_LENGTH`.
- * \param rawRecvPubKey[in]       The subscription public key, in uncompressed
- *                                form. Must be `ECE_WEBPUSH_PUBLIC_KEY_LENGTH`.
- * \param rawRecvPubKeyLen[in]    The length of the subscription public key.
  * \param authSecret[in]          The authentication secret.
  * \param authSecretLen[in]       The length of the authentication secret. Must
  *                                be `ECE_WEBPUSH_AUTH_SECRET_LENGTH`.
  * \param salt[in]                The encryption salt.
  * \param saltLen[in]             The length of the salt. Must be
  *                                `ECE_SALT_LENGTH`.
+ * \param rawRecvPubKey[in]       The subscription public key, in uncompressed
+ *                                form. Must be `ECE_WEBPUSH_PUBLIC_KEY_LENGTH`.
+ * \param rawRecvPubKeyLen[in]    The length of the subscription public key.
  * \param rs[in]                  The record size. Must be at least
  *                                `ECE_AES128GCM_MIN_RS`.
  * \param padLen[in]              The length of additional padding to include in
@@ -279,14 +278,53 @@ ece_aes128gcm_encrypt_with_keys(
   uint8_t* payload, size_t* payloadLen);
 
 /*!
- * ...
+ * Calculates the maximum "aesgcm" ciphertext size. The caller should allocate
+ * and pass an array of this size to `ece_webpush_aesgcm_encrypt_with_keys`.
+ *
+ * \param rs[in]           The record size. Must be least `ECE_AESGCM_MIN_RS`.
+ * \param padLen[in]       The length of additional padding.
+ * \param plaintextLen[in] The length of the plaintext.
+ *
+ * \return                 The maximum ciphertext size, or 0 if `rs` is too
+ *                         small.
  */
 size_t
 ece_aesgcm_ciphertext_max_length(uint32_t rs, size_t padLen,
                                  size_t plaintextLen);
 
 /*!
- * ...
+ * Encrypts a Web Push message using the "aesgcm" scheme.
+ *
+ * \sa                            ece_aesgcm_ciphertext_max_length()
+ *
+ * \param rawSenderPrivKey[in]    The sender private key.
+ * \param rawSenderPrivKeyLen[in] The length of the sender private key. Must be
+ *                                `ECE_WEBPUSH_PRIVATE_KEY_LENGTH`.
+ * \param authSecret[in]          The authentication secret.
+ * \param authSecretLen[in]       The length of the authentication secret. Must
+ *                                be `ECE_WEBPUSH_AUTH_SECRET_LENGTH`.
+ * \param salt[in]                The encryption salt.
+ * \param saltLen[in]             The length of the salt. Must be
+ *                                `ECE_SALT_LENGTH`.
+ * \param rawRecvPubKey[in]       The subscription public key, in uncompressed
+ *                                form. Must be `ECE_WEBPUSH_PUBLIC_KEY_LENGTH`.
+ * \param rawRecvPubKeyLen[in]    The length of the subscription public key.
+ * \param rs[in]                  The record size. Must be at least
+ *                                `ECE_AES128GCM_MIN_RS`.
+ * \param padLen[in]              The length of additional padding to include in
+ *                                the ciphertext, if any.
+ * \param plaintext[in]           The plaintext to encrypt.
+ * \param plaintextLen[in]        The length of the plaintext.
+ * \param ciphertext[in]          An empty array. Must be large enough to hold
+ *                                the full ciphertext.
+ * \param ciphertextLen[in,out]   The input is the length of the empty
+ *                                `ciphertext` array. On success, the output is
+ *                                set to the actual ciphertext length, and
+ *                                `ciphertext[0..ciphertextLen]` contains the
+ *                                ciphertext.
+ *
+ * \return                        `ECE_OK` on success, or an error code if
+ *                                encryption fails.
  */
 int
 ece_webpush_aesgcm_encrypt_with_keys(
