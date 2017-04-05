@@ -87,7 +87,7 @@ ece_aes128gcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* blockPlaintext,
 
   // The plaintext block precedes the padding.
   if (EVP_EncryptUpdate(ctx, record, &chunkLen, blockPlaintext,
-                        (int) blockPlaintextLen) <= 0) {
+                        (int) blockPlaintextLen) != 1) {
     return ECE_ERROR_ENCRYPT;
   }
 
@@ -95,14 +95,14 @@ ece_aes128gcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* blockPlaintext,
   // of the block.
   uint8_t padDelim = lastRecord ? 2 : 1;
   if (EVP_EncryptUpdate(ctx, &record[blockPlaintextLen], &chunkLen, &padDelim,
-                        ECE_AES128GCM_PAD_SIZE) <= 0) {
+                        ECE_AES128GCM_PAD_SIZE) != 1) {
     return ECE_ERROR_ENCRYPT;
   }
 
   for (size_t i = 0; i < blockPadLen; i++) {
     if (EVP_EncryptUpdate(
           ctx, &record[blockPlaintextLen + ECE_AES128GCM_PAD_SIZE + i],
-          &chunkLen, &pad, 1) <= 0) {
+          &chunkLen, &pad, 1) != 1) {
       return ECE_ERROR_ENCRYPT;
     }
   }
@@ -125,20 +125,20 @@ ece_aesgcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* blockPlaintext,
   uint8_t padDelim[ECE_AESGCM_PAD_SIZE];
   ece_write_uint16_be(padDelim, (uint16_t) blockPadLen);
   if (EVP_EncryptUpdate(ctx, record, &chunkLen, padDelim,
-                        ECE_AESGCM_PAD_SIZE) <= 0) {
+                        ECE_AESGCM_PAD_SIZE) != 1) {
     return ECE_ERROR_ENCRYPT;
   }
 
   for (size_t i = 0; i < blockPadLen; i++) {
     if (EVP_EncryptUpdate(ctx, &record[ECE_AESGCM_PAD_SIZE + i], &chunkLen,
-                          &pad, 1) <= 0) {
+                          &pad, 1) != 1) {
       return ECE_ERROR_ENCRYPT;
     }
   }
 
   // The plaintext block follows the padding.
   if (EVP_EncryptUpdate(ctx, &record[ECE_AESGCM_PAD_SIZE + blockPadLen],
-                        &chunkLen, blockPlaintext, (int) plaintextLen) <= 0) {
+                        &chunkLen, blockPlaintext, (int) plaintextLen) != 1) {
     return ECE_ERROR_ENCRYPT;
   }
 
@@ -257,7 +257,7 @@ ece_webpush_encrypt_plaintext(
     uint8_t iv[ECE_NONCE_LENGTH];
     ece_generate_iv(nonce, counter, iv);
 
-    if (EVP_EncryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key, iv) <= 0) {
+    if (EVP_EncryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key, iv) != 1) {
       err = ECE_ERROR_ENCRYPT;
       goto end;
     }
@@ -273,19 +273,22 @@ ece_webpush_encrypt_plaintext(
     // OpenSSL requires us to finalize the encryption, but, since we're using a
     // stream cipher, finalization shouldn't write out any bytes.
     int chunkLen = -1;
-    if (EVP_EncryptFinal_ex(ctx, NULL, &chunkLen) <= 0) {
+    if (EVP_EncryptFinal_ex(ctx, NULL, &chunkLen) != 1) {
       err = ECE_ERROR_ENCRYPT;
       goto end;
     }
 
     // Append the authentication tag.
     if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, ECE_TAG_LENGTH,
-                            &ciphertext[ciphertextEnd - ECE_TAG_LENGTH]) <= 0) {
+                            &ciphertext[ciphertextEnd - ECE_TAG_LENGTH]) != 1) {
       err = ECE_ERROR_ENCRYPT;
       goto end;
     }
 
-    EVP_CIPHER_CTX_reset(ctx);
+    if (EVP_CIPHER_CTX_reset(ctx) != 1) {
+      err = ECE_ERROR_ENCRYPT;
+      goto end;
+    }
 
     plaintextStart = plaintextEnd;
     ciphertextStart = ciphertextEnd;
@@ -366,7 +369,7 @@ ece_aes128gcm_encrypt(const uint8_t* rawRecvPubKey, size_t rawRecvPubKeyLen,
 
   // Generate a random salt.
   uint8_t salt[ECE_SALT_LENGTH];
-  if (RAND_bytes(salt, ECE_SALT_LENGTH) <= 0) {
+  if (RAND_bytes(salt, ECE_SALT_LENGTH) != 1) {
     err = ECE_ERROR_INVALID_SALT;
     goto end;
   }
@@ -384,7 +387,7 @@ ece_aes128gcm_encrypt(const uint8_t* rawRecvPubKey, size_t rawRecvPubKeyLen,
     err = ECE_ERROR_OUT_OF_MEMORY;
     goto end;
   }
-  if (EC_KEY_generate_key(senderPrivKey) <= 0) {
+  if (EC_KEY_generate_key(senderPrivKey) != 1) {
     err = ECE_ERROR_INVALID_PRIVATE_KEY;
     goto end;
   }

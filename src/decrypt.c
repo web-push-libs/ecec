@@ -36,35 +36,34 @@ ece_read_uint16_be(const uint8_t* bytes) {
 static int
 ece_decrypt_record(EVP_CIPHER_CTX* ctx, const uint8_t* key, const uint8_t* iv,
                    const uint8_t* record, size_t recordLen, uint8_t* block) {
-  int err = ECE_OK;
-
-  if (EVP_DecryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key, iv) <= 0) {
-    err = ECE_ERROR_DECRYPT;
-    goto end;
+  if (EVP_DecryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key, iv) != 1) {
+    return ECE_ERROR_DECRYPT;
   }
+
   // The authentication tag is included at the end of the encrypted record.
   uint8_t tag[ECE_TAG_LENGTH];
   memcpy(tag, &record[recordLen - ECE_TAG_LENGTH], ECE_TAG_LENGTH);
-  if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, ECE_TAG_LENGTH, tag) <=
-      0) {
-    err = ECE_ERROR_DECRYPT;
-    goto end;
-  }
-  int updateLen = 0;
-  if (EVP_DecryptUpdate(ctx, block, &updateLen, record,
-                        (int) recordLen - ECE_TAG_LENGTH) <= 0) {
-    err = ECE_ERROR_DECRYPT;
-    goto end;
-  }
-  int finalLen = -1;
-  if (EVP_DecryptFinal_ex(ctx, NULL, &finalLen) <= 0) {
-    err = ECE_ERROR_DECRYPT;
-    goto end;
+  if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, ECE_TAG_LENGTH, tag) !=
+      1) {
+    return ECE_ERROR_DECRYPT;
   }
 
-end:
-  EVP_CIPHER_CTX_reset(ctx);
-  return err;
+  int updateLen = 0;
+  if (EVP_DecryptUpdate(ctx, block, &updateLen, record,
+                        (int) recordLen - ECE_TAG_LENGTH) != 1) {
+    return ECE_ERROR_DECRYPT;
+  }
+
+  int finalLen = -1;
+  if (EVP_DecryptFinal_ex(ctx, NULL, &finalLen) != 1) {
+    return ECE_ERROR_DECRYPT;
+  }
+
+  if (EVP_CIPHER_CTX_reset(ctx) != 1) {
+    return ECE_ERROR_DECRYPT;
+  }
+
+  return ECE_OK;
 }
 
 static int
@@ -256,7 +255,7 @@ ece_webpush_generate_keys(uint8_t* rawRecvPrivKey, size_t rawRecvPrivKeyLen,
     err = ECE_ERROR_OUT_OF_MEMORY;
     goto end;
   }
-  if (EC_KEY_generate_key(subKey) <= 0) {
+  if (EC_KEY_generate_key(subKey) != 1) {
     err = ECE_ERROR_GENERATE_KEYS;
     goto end;
   }
@@ -273,7 +272,7 @@ ece_webpush_generate_keys(uint8_t* rawRecvPrivKey, size_t rawRecvPrivKeyLen,
     goto end;
   }
 
-  if (RAND_bytes(authSecret, (int) authSecretLen) <= 0) {
+  if (RAND_bytes(authSecret, (int) authSecretLen) != 1) {
     err = ECE_ERROR_INVALID_AUTH_SECRET;
     goto end;
   }

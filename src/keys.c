@@ -61,7 +61,7 @@ ece_import_private_key(const uint8_t* rawKey, size_t rawKeyLen) {
   if (!key) {
     goto error;
   }
-  if (EC_KEY_oct2priv(key, rawKey, rawKeyLen) <= 0) {
+  if (EC_KEY_oct2priv(key, rawKey, rawKeyLen) != 1) {
     goto error;
   }
   const EC_GROUP* group = EC_KEY_get0_group(key);
@@ -70,10 +70,10 @@ ece_import_private_key(const uint8_t* rawKey, size_t rawKeyLen) {
     goto error;
   }
   const BIGNUM* privKey = EC_KEY_get0_private_key(key);
-  if (EC_POINT_mul(group, pubKeyPt, privKey, NULL, NULL, NULL) <= 0) {
+  if (EC_POINT_mul(group, pubKeyPt, privKey, NULL, NULL, NULL) != 1) {
     goto error;
   }
-  if (EC_KEY_set_public_key(key, pubKeyPt) <= 0) {
+  if (EC_KEY_set_public_key(key, pubKeyPt) != 1) {
     goto error;
   }
   goto end;
@@ -93,7 +93,7 @@ ece_import_public_key(const uint8_t* rawKey, size_t rawKeyLen) {
   if (!key) {
     return NULL;
   }
-  if (!EC_KEY_oct2key(key, rawKey, rawKeyLen, NULL)) {
+  if (EC_KEY_oct2key(key, rawKey, rawKeyLen, NULL) != 1) {
     EC_KEY_free(key);
     return NULL;
   }
@@ -112,27 +112,27 @@ ece_hkdf_sha256(const uint8_t* salt, size_t saltLen, const uint8_t* ikm,
     err = ECE_ERROR_HKDF;
     goto end;
   }
-  if (EVP_PKEY_derive_init(ctx) <= 0) {
+  if (EVP_PKEY_derive_init(ctx) != 1) {
     err = ECE_ERROR_HKDF;
     goto end;
   }
-  if (EVP_PKEY_CTX_set_hkdf_md(ctx, EVP_sha256()) <= 0) {
+  if (EVP_PKEY_CTX_set_hkdf_md(ctx, EVP_sha256()) != 1) {
     err = ECE_ERROR_HKDF;
     goto end;
   }
-  if (EVP_PKEY_CTX_set1_hkdf_salt(ctx, salt, (int) saltLen) <= 0) {
+  if (EVP_PKEY_CTX_set1_hkdf_salt(ctx, salt, (int) saltLen) != 1) {
     err = ECE_ERROR_HKDF;
     goto end;
   }
-  if (EVP_PKEY_CTX_set1_hkdf_key(ctx, ikm, (int) ikmLen) <= 0) {
+  if (EVP_PKEY_CTX_set1_hkdf_key(ctx, ikm, (int) ikmLen) != 1) {
     err = ECE_ERROR_HKDF;
     goto end;
   }
-  if (EVP_PKEY_CTX_add1_hkdf_info(ctx, info, (int) infoLen) <= 0) {
+  if (EVP_PKEY_CTX_add1_hkdf_info(ctx, info, (int) infoLen) != 1) {
     err = ECE_ERROR_HKDF;
     goto end;
   }
-  if (EVP_PKEY_derive(ctx, output, &outputLen) <= 0) {
+  if (EVP_PKEY_derive(ctx, output, &outputLen) != 1) {
     err = ECE_ERROR_HKDF;
     goto end;
   }
@@ -150,11 +150,7 @@ ece_compute_secret(EC_KEY* privKey, EC_KEY* pubKey, size_t* sharedSecretLen) {
 
   const EC_GROUP* group = EC_KEY_get0_group(privKey);
   const EC_POINT* pubKeyPt = EC_KEY_get0_public_key(pubKey);
-  int fieldSize = EC_GROUP_get_degree(group);
-  if (fieldSize <= 0) {
-    goto error;
-  }
-  *sharedSecretLen = ((size_t) fieldSize + 7) / 8;
+  *sharedSecretLen = (size_t)((EC_GROUP_get_degree(group) + 7) / 8);
   sharedSecret = calloc(*sharedSecretLen, sizeof(uint8_t));
   if (!sharedSecret) {
     goto error;
