@@ -71,7 +71,19 @@ ece_base64url_decode(const char* base64, size_t base64Len,
     }
   }
 
-  size_t maxDecodedLen = (base64Len * 3) / 4;
+  // Determine the size of the decoded result. Every 4 bytes of input decode
+  // to 3 bytes of output. The final quantum can be 2 or 3 bytes: 2 bytes
+  // decode to 1 byte, and 3 bytes decode to 2 bytes.
+  size_t maxDecodedLen = (base64Len / 4) * 3;
+  size_t remaining = base64Len % 4;
+  if (remaining == 2) {
+    maxDecodedLen++;
+  } else if (remaining == 3) {
+    maxDecodedLen += 2;
+  } else if (remaining) {
+    return 0;
+  }
+
   if (!decodedLen) {
     return maxDecodedLen;
   }
