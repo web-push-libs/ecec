@@ -13,9 +13,12 @@
 
 typedef size_t (*min_block_pad_length_t)(size_t padLen, size_t dataPerBlock);
 
-typedef int (*encrypt_block_t)(EVP_CIPHER_CTX* ctx, const uint8_t* plaintext,
-                               size_t plaintextLen, uint8_t* pad, size_t padLen,
+typedef int (*encrypt_block_t)(EVP_CIPHER_CTX* ctx,
+                               const uint8_t* blockPlaintext,
+                               size_t blockPlaintextLen, size_t blockPadLen,
                                bool lastRecord, uint8_t* record);
+
+static const uint8_t pad = 0;
 
 // Writes an unsigned 32-bit integer in network byte order.
 static inline void
@@ -77,23 +80,31 @@ ece_ciphertext_max_length(uint32_t rs, size_t padSize, size_t padLen,
 
 // Encrypts an "aes128gcm" block into `record`.
 static int
-ece_aes128gcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* plaintext,
-                            size_t plaintextLen, uint8_t* pad, size_t padLen,
+ece_aes128gcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* blockPlaintext,
+                            size_t blockPlaintextLen, size_t blockPadLen,
                             bool lastRecord, uint8_t* record) {
   int chunkLen = -1;
 
   // The plaintext block precedes the padding.
-  if (EVP_EncryptUpdate(ctx, record, &chunkLen, plaintext,
-                        (int) plaintextLen) <= 0) {
+  if (EVP_EncryptUpdate(ctx, record, &chunkLen, blockPlaintext,
+                        (int) blockPlaintextLen) <= 0) {
     return ECE_ERROR_ENCRYPT;
   }
 
   // The padding block comprises the delimiter, followed by zeros up to the end
   // of the block.
-  pad[0] = lastRecord ? 2 : 1;
-  if (EVP_EncryptUpdate(ctx, &record[plaintextLen], &chunkLen, pad,
-                        (int) (padLen + ECE_AES128GCM_PAD_SIZE)) <= 0) {
+  uint8_t padDelim = lastRecord ? 2 : 1;
+  if (EVP_EncryptUpdate(ctx, &record[blockPlaintextLen], &chunkLen, &padDelim,
+                        ECE_AES128GCM_PAD_SIZE) <= 0) {
     return ECE_ERROR_ENCRYPT;
+  }
+
+  for (size_t i = 0; i < blockPadLen; i++) {
+    if (EVP_EncryptUpdate(
+          ctx, &record[blockPlaintextLen + ECE_AES128GCM_PAD_SIZE + i],
+          &chunkLen, &pad, 1) <= 0) {
+      return ECE_ERROR_ENCRYPT;
+    }
   }
 
   return ECE_OK;
@@ -101,8 +112,8 @@ ece_aes128gcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* plaintext,
 
 // Encrypts an "aesgcm" block into `record`.
 static int
-ece_aesgcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* plaintext,
-                         size_t plaintextLen, uint8_t* pad, size_t padLen,
+ece_aesgcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* blockPlaintext,
+                         size_t plaintextLen, size_t blockPadLen,
                          bool lastRecord, uint8_t* record) {
   ECE_UNUSED(lastRecord);
 
@@ -111,15 +122,23 @@ ece_aesgcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* plaintext,
   // The padding block comprises the padding length as a 16-bit integer,
   // followed by that many zeros. We checked that the length fits into a
   // `uint16_t` in `ece_aesgcm_min_block_pad_length`, so this cast is safe.
-  ece_write_uint16_be(pad, (uint16_t) padLen);
-  if (EVP_EncryptUpdate(ctx, record, &chunkLen, pad,
-                        (int) (padLen + ECE_AESGCM_PAD_SIZE)) <= 0) {
+  uint8_t padDelim[ECE_AESGCM_PAD_SIZE];
+  ece_write_uint16_be(padDelim, (uint16_t) blockPadLen);
+  if (EVP_EncryptUpdate(ctx, record, &chunkLen, padDelim,
+                        ECE_AESGCM_PAD_SIZE) <= 0) {
     return ECE_ERROR_ENCRYPT;
   }
 
+  for (size_t i = 0; i < blockPadLen; i++) {
+    if (EVP_EncryptUpdate(ctx, &record[ECE_AESGCM_PAD_SIZE + i], &chunkLen,
+                          &pad, 1) <= 0) {
+      return ECE_ERROR_ENCRYPT;
+    }
+  }
+
   // The plaintext block follows the padding.
-  if (EVP_EncryptUpdate(ctx, &record[padLen + ECE_AESGCM_PAD_SIZE], &chunkLen,
-                        plaintext, (int) plaintextLen) <= 0) {
+  if (EVP_EncryptUpdate(ctx, &record[ECE_AESGCM_PAD_SIZE + blockPadLen],
+                        &chunkLen, blockPlaintext, (int) plaintextLen) <= 0) {
     return ECE_ERROR_ENCRYPT;
   }
 
@@ -141,7 +160,6 @@ ece_webpush_encrypt_plaintext(
   int err = ECE_OK;
 
   EVP_CIPHER_CTX* ctx = NULL;
-  uint8_t* pad = NULL;
 
   if (authSecretLen != ECE_WEBPUSH_AUTH_SECRET_LENGTH) {
     err = ECE_ERROR_INVALID_AUTH_SECRET;
@@ -171,13 +189,6 @@ ece_webpush_encrypt_plaintext(
 
   ctx = EVP_CIPHER_CTX_new();
   if (!ctx) {
-    err = ECE_ERROR_OUT_OF_MEMORY;
-    goto end;
-  }
-
-  // Allocate enough memory to hold the padding and padding delimiter.
-  pad = calloc(padSize + padLen, sizeof(uint8_t));
-  if (!pad) {
     err = ECE_ERROR_OUT_OF_MEMORY;
     goto end;
   }
@@ -252,7 +263,7 @@ ece_webpush_encrypt_plaintext(
     }
 
     // Encrypt and pad the block.
-    err = encryptBlock(ctx, &plaintext[plaintextStart], blockPlaintextLen, pad,
+    err = encryptBlock(ctx, &plaintext[plaintextStart], blockPlaintextLen,
                        blockPadLen, lastRecord, &ciphertext[ciphertextStart]);
     if (err) {
       err = ECE_ERROR_ENCRYPT;
@@ -286,7 +297,6 @@ ece_webpush_encrypt_plaintext(
 
 end:
   EVP_CIPHER_CTX_free(ctx);
-  free(pad);
   return err;
 }
 
