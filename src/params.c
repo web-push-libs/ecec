@@ -347,14 +347,12 @@ ece_aes128gcm_payload_extract_params(const uint8_t* payload, size_t payloadLen,
     return ECE_ERROR_SHORT_HEADER;
   }
 
-  *salt = payload;
   *saltLen = ECE_SALT_LENGTH;
 
   *keyIdLen = payload[ECE_SALT_LENGTH + 4];
   if (payloadLen < ECE_AES128GCM_HEADER_LENGTH + *keyIdLen) {
     return ECE_ERROR_SHORT_HEADER;
   }
-  *keyId = &payload[ECE_AES128GCM_HEADER_LENGTH];
 
   *rs = ece_read_uint32_be(&payload[ECE_SALT_LENGTH]);
   if (*rs < ECE_AES128GCM_MIN_RS) {
@@ -362,8 +360,14 @@ ece_aes128gcm_payload_extract_params(const uint8_t* payload, size_t payloadLen,
   }
 
   size_t payloadStart = ECE_AES128GCM_HEADER_LENGTH + *keyIdLen;
-  *ciphertext = &payload[payloadStart];
   *ciphertextLen = payloadLen - payloadStart;
+  if (!(*ciphertextLen)) {
+    return ECE_ERROR_ZERO_CIPHERTEXT;
+  }
+
+  *salt = payload;
+  *keyId = &payload[ECE_AES128GCM_HEADER_LENGTH];
+  *ciphertext = &payload[payloadStart];
 
   return ECE_OK;
 }
@@ -420,7 +424,7 @@ ece_webpush_aesgcm_headers_extract_params(const char* cryptoKeyHeader,
       }
       int result = sscanf(value, "%" SCNu32, &rsValue);
       free(value);
-      if (result <= 0 || !rsValue) {
+      if (result <= 0 || rsValue < ECE_AESGCM_MIN_RS) {
         err = ECE_ERROR_INVALID_RS;
         goto end;
       }
