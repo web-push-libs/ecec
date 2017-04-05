@@ -220,22 +220,33 @@ ece_webpush_encrypt_plaintext(
     padLen -= blockPadLen;
 
     // Fill the rest of the block with plaintext.
-    size_t plaintextEnd = plaintextStart + dataPerBlock - blockPadLen;
-    bool plaintextExhausted = false;
-    if (plaintextEnd >= plaintextLen) {
+    size_t maxBlockPlaintextLen = dataPerBlock - blockPadLen;
+    size_t plaintextEnd;
+    if (maxBlockPlaintextLen > plaintextLen - plaintextStart) {
+      // Equivalent to `plaintextStart + maxBlockPlaintextLen > plaintextLen`
+      // without overflow.
       plaintextEnd = plaintextLen;
-      plaintextExhausted = true;
+    } else {
+      plaintextEnd = plaintextStart + maxBlockPlaintextLen;
     }
     size_t blockPlaintextLen = plaintextEnd - plaintextStart;
 
     // The full length of the plaintext and padding.
     size_t blockLen = blockPlaintextLen + blockPadLen;
 
-    size_t ciphertextEnd = ciphertextStart + blockLen + overhead;
-    if (ciphertextEnd > maxCiphertextLen) {
+    // The full length of the encrypted record, including room for the
+    // plaintext, padding, padding delimiter, and auth tag.
+    size_t recordLen = blockLen + overhead;
+    size_t ciphertextEnd;
+    if (recordLen > maxCiphertextLen - ciphertextStart) {
+      // Equivalent to `ciphertextStart + recordLen > maxCiphertextLen`
+      // without overflow.
       ciphertextEnd = maxCiphertextLen;
+    } else {
+      ciphertextEnd = ciphertextStart + recordLen;
     }
 
+    bool plaintextExhausted = plaintextEnd >= plaintextLen;
     if (!padLen && plaintextExhausted && !needsTrailer(rs, ciphertextEnd)) {
       // We've reached the last record when the padding and plaintext are
       // exhausted, and we don't need to write an empty trailing block.
@@ -349,8 +360,12 @@ ece_aes128gcm_payload_max_length(uint32_t rs, size_t padLen,
   if (!ciphertextLen) {
     return 0;
   }
-  return ECE_AES128GCM_HEADER_LENGTH + ECE_AES128GCM_MAX_KEY_ID_LENGTH +
-         ciphertextLen;
+  size_t maxHeaderLen =
+    ECE_AES128GCM_HEADER_LENGTH + ECE_AES128GCM_MAX_KEY_ID_LENGTH;
+  if (ciphertextLen > SIZE_MAX - maxHeaderLen) {
+    return 0;
+  }
+  return maxHeaderLen + ciphertextLen;
 }
 
 int
@@ -437,6 +452,11 @@ end:
 size_t
 ece_aesgcm_ciphertext_max_length(uint32_t rs, size_t padLen,
                                  size_t plaintextLen) {
+  // The "aesgcm" record size includes the size of the padding delimiter, but
+  // not the auth tag.
+  if (rs > UINT32_MAX - ECE_TAG_LENGTH) {
+    return 0;
+  }
   rs += ECE_TAG_LENGTH;
   return ece_ciphertext_max_length(rs, ECE_AESGCM_PAD_SIZE, padLen,
                                    plaintextLen);
@@ -455,6 +475,12 @@ ece_webpush_aesgcm_encrypt_with_keys(
   EC_KEY* senderPrivKey = NULL;
   EC_KEY* recvPubKey = NULL;
 
+  if (rs > UINT32_MAX - ECE_TAG_LENGTH) {
+    err = ECE_ERROR_INVALID_RS;
+    goto end;
+  }
+  rs += ECE_TAG_LENGTH;
+
   senderPrivKey = ece_import_private_key(rawSenderPrivKey, rawSenderPrivKeyLen);
   if (!senderPrivKey) {
     err = ECE_ERROR_INVALID_PRIVATE_KEY;
@@ -466,7 +492,6 @@ ece_webpush_aesgcm_encrypt_with_keys(
     goto end;
   }
 
-  rs += ECE_TAG_LENGTH;
   err = ece_webpush_encrypt_plaintext(
     senderPrivKey, recvPubKey, authSecret, authSecretLen, salt, saltLen, rs,
     ECE_AESGCM_PAD_SIZE, padLen, plaintext, plaintextLen,

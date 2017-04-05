@@ -90,9 +90,13 @@ ece_decrypt_records(const uint8_t* key, const uint8_t* nonce, uint32_t rs,
   size_t recordStart = 0;
   size_t blockStart = 0;
   for (size_t counter = 0; recordStart < ciphertextLen; counter++) {
-    size_t recordEnd = recordStart + rs;
-    if (recordEnd > ciphertextLen) {
+    size_t recordEnd;
+    if (rs > ciphertextLen - recordStart) {
+      // This check is equivalent to `recordStart + rs > ciphertextLen`; it's
+      // written this way to avoid an integer overflow.
       recordEnd = ciphertextLen;
+    } else {
+      recordEnd = recordStart + rs;
     }
     size_t recordLen = recordEnd - recordStart;
     if (recordLen <= ECE_TAG_LENGTH) {
@@ -100,9 +104,13 @@ ece_decrypt_records(const uint8_t* key, const uint8_t* nonce, uint32_t rs,
       goto end;
     }
 
-    size_t blockEnd = blockStart + recordLen - ECE_TAG_LENGTH;
-    if (blockEnd > maxBlockEnd) {
+    size_t dataLen = recordLen - ECE_TAG_LENGTH;
+    size_t blockEnd;
+    if (dataLen > maxBlockEnd - blockStart) {
+      // Equivalent to `blockStart + dataLen > maxBlockEnd` without overflow.
       blockEnd = maxBlockEnd;
+    } else {
+      blockEnd = blockStart + dataLen;
     }
 
     // Generate the IV for this record using the nonce.
