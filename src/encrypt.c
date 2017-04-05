@@ -60,8 +60,9 @@ static inline size_t
 ece_ciphertext_max_length(uint32_t rs, size_t padSize, size_t padLen,
                           size_t plaintextLen) {
   // The per-record overhead for the padding delimiter and authentication tag.
+  // 17 for "aes128gcm", 18 for "aesgcm".
   size_t overhead = padSize + ECE_TAG_LENGTH;
-  if (rs <= overhead) {
+  if (rs <= overhead || padLen > SIZE_MAX - plaintextLen) {
     return 0;
   }
   // The total length of the data to encrypt, including the plaintext and
@@ -72,6 +73,9 @@ ece_ciphertext_max_length(uint32_t rs, size_t padSize, size_t padLen,
   size_t dataPerBlock = rs - overhead;
   // The total number of encrypted records.
   size_t numRecords = (dataLen / dataPerBlock) + 1;
+  if (numRecords > (SIZE_MAX - dataLen) / overhead) {
+    return 0;
+  }
   return dataLen + (overhead * numRecords);
 }
 
@@ -171,8 +175,7 @@ ece_webpush_encrypt_plaintext(
     goto end;
   }
 
-  // Make sure the ciphertext buffer is large enough to hold the header and
-  // ciphertext.
+  // Make sure the ciphertext buffer is large enough to hold the ciphertext.
   size_t maxCiphertextLen =
     ece_ciphertext_max_length(rs, padSize, padLen, plaintextLen);
   if (!maxCiphertextLen) {

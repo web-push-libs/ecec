@@ -13,7 +13,13 @@ typedef int (*unpad_t)(uint8_t* block, bool isLastRecord, size_t* blockLen);
 // Returns the maximum decrypted length of an "aes128gcm" ciphertext.
 static inline size_t
 ece_aes128gcm_max_decrypted_length(uint32_t rs, size_t ciphertextLen) {
+  if (rs < ECE_AES128GCM_MIN_RS) {
+    return 0;
+  }
   size_t numRecords = (ciphertextLen / rs) + 1;
+  if (numRecords > SIZE_MAX / ECE_TAG_LENGTH) {
+    return 0;
+  }
   return ciphertextLen - (ECE_TAG_LENGTH * numRecords);
 }
 
