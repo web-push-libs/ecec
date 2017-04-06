@@ -75,13 +75,17 @@ ece_base64url_decode(const char* base64, size_t base64Len,
   // to 3 bytes of output. The final quantum can be 2 or 3 bytes: 2 bytes
   // decode to 1 byte, and 3 bytes decode to 2 bytes.
   size_t maxDecodedLen = (base64Len / 4) * 3;
-  size_t remaining = base64Len % 4;
-  if (remaining == 2) {
-    maxDecodedLen++;
-  } else if (remaining == 3) {
-    maxDecodedLen += 2;
-  } else if (remaining) {
+  switch (base64Len % 4) {
+  case 1:
     return 0;
+
+  case 2:
+    maxDecodedLen++;
+    break;
+
+  case 3:
+    maxDecodedLen += 2;
+    break;
   }
 
   if (!decodedLen) {
@@ -106,7 +110,21 @@ ece_base64url_decode(const char* base64, size_t base64Len,
     *binary++ = (y << 6 | z) & 0xff;
   }
 
-  if (base64Len == 3) {
+  switch (base64Len) {
+  case 1:
+    return 0;
+
+  case 2: {
+    uint8_t w, x;
+    if (!ece_base64url_decode_lookup(*base64++, &w) ||
+        !ece_base64url_decode_lookup(*base64++, &x)) {
+      return 0;
+    }
+    *binary++ = (w << 2 | x >> 4) & 0xff;
+    break;
+  }
+
+  case 3: {
     uint8_t w, x, y;
     if (!ece_base64url_decode_lookup(*base64++, &w) ||
         !ece_base64url_decode_lookup(*base64++, &x) ||
@@ -115,15 +133,8 @@ ece_base64url_decode(const char* base64, size_t base64Len,
     }
     *binary++ = (w << 2 | x >> 4) & 0xff;
     *binary++ = (x << 4 | y >> 2) & 0xff;
-  } else if (base64Len == 2) {
-    uint8_t w, x;
-    if (!ece_base64url_decode_lookup(*base64++, &w) ||
-        !ece_base64url_decode_lookup(*base64++, &x)) {
-      return 0;
-    }
-    *binary++ = (w << 2 | x >> 4) & 0xff;
-  } else if (base64Len) {
-    return 0;
+    break;
+  }
   }
 
   return (size_t)(binary - decoded);
