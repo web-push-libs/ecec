@@ -8,7 +8,7 @@
 
 typedef size_t (*max_decrypted_length_t)(uint32_t rs, size_t ciphertextLen);
 
-typedef int (*unpad_t)(uint8_t* block, bool isLastRecord, size_t* blockLen);
+typedef int (*unpad_t)(uint8_t* block, bool lastRecord, size_t* blockLen);
 
 // Returns the maximum decrypted length of an "aes128gcm" ciphertext.
 static inline size_t
@@ -81,8 +81,9 @@ ece_decrypt_records(const uint8_t* key, const uint8_t* nonce, uint32_t rs,
 
   EVP_CIPHER_CTX* ctx = NULL;
 
-  size_t maxBlockEnd = maxDecryptedLen(rs, ciphertextLen);
-  if (*plaintextLen < maxBlockEnd) {
+  // Make sure the plaintext array is large enough to hold the full plaintext.
+  size_t maxPlaintextLen = maxDecryptedLen(rs, ciphertextLen);
+  if (*plaintextLen < maxPlaintextLen) {
     err = ECE_ERROR_OUT_OF_MEMORY;
     goto end;
   }
@@ -93,50 +94,55 @@ ece_decrypt_records(const uint8_t* key, const uint8_t* nonce, uint32_t rs,
     goto end;
   }
 
-  size_t recordStart = 0;
-  size_t blockStart = 0;
-  for (size_t counter = 0; recordStart < ciphertextLen; counter++) {
-    size_t recordEnd;
-    if (rs > ciphertextLen - recordStart) {
-      // This check is equivalent to `recordStart + rs > ciphertextLen`; it's
-      // written this way to avoid an integer overflow.
-      recordEnd = ciphertextLen;
+  // The offset at which to start reading the ciphertext.
+  size_t ciphertextStart = 0;
+
+  // The offset at which to start writing the plaintext.
+  size_t plaintextStart = 0;
+
+  for (size_t counter = 0; ciphertextStart < ciphertextLen; counter++) {
+    size_t ciphertextEnd;
+    if (rs > ciphertextLen - ciphertextStart) {
+      // This check is equivalent to `ciphertextStart + rs > ciphertextLen`;
+      // it's written this way to avoid an integer overflow.
+      ciphertextEnd = ciphertextLen;
     } else {
-      recordEnd = recordStart + rs;
+      ciphertextEnd = ciphertextStart + rs;
     }
-    size_t recordLen = recordEnd - recordStart;
+
+    // The full length of the encrypted record.
+    size_t recordLen = ciphertextEnd - ciphertextStart;
     if (recordLen <= ECE_TAG_LENGTH) {
       err = ECE_ERROR_SHORT_BLOCK;
       goto end;
-    }
-
-    size_t dataLen = recordLen - ECE_TAG_LENGTH;
-    size_t blockEnd;
-    if (dataLen > maxBlockEnd - blockStart) {
-      // Equivalent to `blockStart + dataLen > maxBlockEnd` without overflow.
-      blockEnd = maxBlockEnd;
-    } else {
-      blockEnd = blockStart + dataLen;
     }
 
     // Generate the IV for this record using the nonce.
     uint8_t iv[ECE_NONCE_LENGTH];
     ece_generate_iv(nonce, counter, iv);
 
-    err = ece_decrypt_record(ctx, key, iv, &ciphertext[recordStart], recordLen,
-                             &plaintext[blockStart]);
+    // Decrypt the record.
+    err = ece_decrypt_record(ctx, key, iv, &ciphertext[ciphertextStart],
+                             recordLen, &plaintext[plaintextStart]);
     if (err) {
       goto end;
     }
-    size_t blockLen = blockEnd - blockStart;
-    err = unpad(&plaintext[blockStart], recordEnd >= ciphertextLen, &blockLen);
+
+    // `unpad` sets `blockLen` to the actual plaintext block length, without
+    // the padding delimiter and padding.
+    bool lastRecord = ciphertextEnd >= ciphertextLen;
+    size_t blockLen = recordLen - ECE_TAG_LENGTH;
+    err = unpad(&plaintext[plaintextStart], lastRecord, &blockLen);
     if (err) {
       goto end;
     }
-    recordStart = recordEnd;
-    blockStart += blockLen;
+
+    ciphertextStart = ciphertextEnd;
+    plaintextStart += blockLen;
   }
-  *plaintextLen = blockStart;
+
+  // Finally, set the actual plaintext length.
+  *plaintextLen = plaintextStart;
 
 end:
   EVP_CIPHER_CTX_free(ctx);
@@ -210,8 +216,8 @@ end:
 
 // Removes padding from a decrypted "aesgcm" block.
 static int
-ece_aesgcm_unpad(uint8_t* block, bool isLastRecord, size_t* blockLen) {
-  ECE_UNUSED(isLastRecord);
+ece_aesgcm_unpad(uint8_t* block, bool lastRecord, size_t* blockLen) {
+  ECE_UNUSED(lastRecord);
   if (*blockLen < 2) {
     return ECE_ERROR_DECRYPT_PADDING;
   }
@@ -237,14 +243,14 @@ ece_aesgcm_unpad(uint8_t* block, bool isLastRecord, size_t* blockLen) {
 
 // Removes padding from a decrypted "aes128gcm" block.
 static int
-ece_aes128gcm_unpad(uint8_t* block, bool isLastRecord, size_t* blockLen) {
+ece_aes128gcm_unpad(uint8_t* block, bool lastRecord, size_t* blockLen) {
   // Remove trailing padding.
   while (*blockLen > 0) {
     (*blockLen)--;
     if (!block[*blockLen]) {
       continue;
     }
-    uint8_t padDelim = isLastRecord ? 2 : 1;
+    uint8_t padDelim = lastRecord ? 2 : 1;
     if (block[*blockLen] != padDelim) {
       // Last record needs to start padding with a 2; preceding records need
       // to start padding with a 1.
