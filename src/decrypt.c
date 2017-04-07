@@ -1,6 +1,7 @@
 #include "ece/keys.h"
 #include "ece/trailer.h"
 
+#include <assert.h>
 #include <string.h>
 
 #include <openssl/evp.h>
@@ -42,6 +43,8 @@ ece_read_uint16_be(const uint8_t* bytes) {
 static int
 ece_decrypt_record(EVP_CIPHER_CTX* ctx, const uint8_t* key, const uint8_t* iv,
                    const uint8_t* record, size_t recordLen, uint8_t* block) {
+  int chunkLen = -1;
+
   if (EVP_DecryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key, iv) != 1) {
     return ECE_ERROR_DECRYPT;
   }
@@ -54,14 +57,16 @@ ece_decrypt_record(EVP_CIPHER_CTX* ctx, const uint8_t* key, const uint8_t* iv,
     return ECE_ERROR_DECRYPT;
   }
 
-  int updateLen = 0;
-  if (EVP_DecryptUpdate(ctx, block, &updateLen, record,
-                        (int) recordLen - ECE_TAG_LENGTH) != 1) {
+  size_t blockLen = recordLen - ECE_TAG_LENGTH;
+  if (blockLen > INT_MAX ||
+      EVP_DecryptUpdate(ctx, block, &chunkLen, record, (int) blockLen) != 1) {
     return ECE_ERROR_DECRYPT;
   }
 
-  int finalLen = -1;
-  if (EVP_DecryptFinal_ex(ctx, NULL, &finalLen) != 1) {
+  // Since we're using a stream cipher, finalization shouldn't write out any
+  // bytes.
+  assert(EVP_CIPHER_CTX_block_size(ctx) == 1);
+  if (EVP_DecryptFinal_ex(ctx, NULL, &chunkLen) != 1) {
     return ECE_ERROR_DECRYPT;
   }
 
@@ -292,7 +297,8 @@ ece_webpush_generate_keys(uint8_t* rawRecvPrivKey, size_t rawRecvPrivKeyLen,
     goto end;
   }
 
-  if (RAND_bytes(authSecret, (int) authSecretLen) != 1) {
+  if (authSecretLen > INT_MAX ||
+      RAND_bytes(authSecret, (int) authSecretLen) != 1) {
     err = ECE_ERROR_INVALID_AUTH_SECRET;
     goto end;
   }

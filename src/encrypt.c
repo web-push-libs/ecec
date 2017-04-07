@@ -1,6 +1,7 @@
 #include "ece/keys.h"
 #include "ece/trailer.h"
 
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -87,7 +88,8 @@ ece_aes128gcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* blockPlaintext,
   int chunkLen = -1;
 
   // The plaintext block precedes the padding.
-  if (EVP_EncryptUpdate(ctx, record, &chunkLen, blockPlaintext,
+  if (blockPlaintextLen > INT_MAX ||
+      EVP_EncryptUpdate(ctx, record, &chunkLen, blockPlaintext,
                         (int) blockPlaintextLen) != 1) {
     return ECE_ERROR_ENCRYPT;
   }
@@ -138,7 +140,8 @@ ece_aesgcm_encrypt_block(EVP_CIPHER_CTX* ctx, const uint8_t* blockPlaintext,
   }
 
   // The plaintext block follows the padding.
-  if (EVP_EncryptUpdate(ctx, &record[ECE_AESGCM_PAD_SIZE + blockPadLen],
+  if (plaintextLen > INT_MAX ||
+      EVP_EncryptUpdate(ctx, &record[ECE_AESGCM_PAD_SIZE + blockPadLen],
                         &chunkLen, blockPlaintext, (int) plaintextLen) != 1) {
     return ECE_ERROR_ENCRYPT;
   }
@@ -284,6 +287,7 @@ ece_webpush_encrypt_plaintext(
     // OpenSSL requires us to finalize the encryption, but, since we're using a
     // stream cipher, finalization shouldn't write out any bytes.
     int chunkLen = -1;
+    assert(EVP_CIPHER_CTX_block_size(ctx) == 1);
     if (EVP_EncryptFinal_ex(ctx, NULL, &chunkLen) != 1) {
       err = ECE_ERROR_ENCRYPT;
       goto end;

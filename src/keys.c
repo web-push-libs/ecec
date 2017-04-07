@@ -120,15 +120,18 @@ ece_hkdf_sha256(const void* salt, size_t saltLen, const void* ikm,
     err = ECE_ERROR_HKDF;
     goto end;
   }
-  if (EVP_PKEY_CTX_set1_hkdf_salt(ctx, salt, (int) saltLen) != 1) {
+  if (saltLen > INT_MAX ||
+      EVP_PKEY_CTX_set1_hkdf_salt(ctx, salt, (int) saltLen) != 1) {
     err = ECE_ERROR_HKDF;
     goto end;
   }
-  if (EVP_PKEY_CTX_set1_hkdf_key(ctx, ikm, (int) ikmLen) != 1) {
+  if (ikmLen > INT_MAX ||
+      EVP_PKEY_CTX_set1_hkdf_key(ctx, ikm, (int) ikmLen) != 1) {
     err = ECE_ERROR_HKDF;
     goto end;
   }
-  if (EVP_PKEY_CTX_add1_hkdf_info(ctx, info, (int) infoLen) != 1) {
+  if (infoLen > INT_MAX ||
+      EVP_PKEY_CTX_add1_hkdf_info(ctx, info, (int) infoLen) != 1) {
     err = ECE_ERROR_HKDF;
     goto end;
   }
