@@ -364,18 +364,13 @@ ece_webpush_aes128gcm_decrypt(const uint8_t* rawRecvPrivKey,
 int
 ece_webpush_aesgcm_decrypt(const uint8_t* rawRecvPrivKey,
                            size_t rawRecvPrivKeyLen, const uint8_t* authSecret,
-                           size_t authSecretLen, const char* cryptoKeyHeader,
-                           const char* encryptionHeader,
+                           size_t authSecretLen, const uint8_t* salt,
+                           size_t saltLen, const uint8_t* rawSenderPubKey,
+                           size_t rawSenderPubKeyLen, uint32_t rs,
                            const uint8_t* ciphertext, size_t ciphertextLen,
                            uint8_t* plaintext, size_t* plaintextLen) {
-  uint8_t salt[ECE_SALT_LENGTH];
-  uint8_t rawSenderPubKey[ECE_WEBPUSH_PUBLIC_KEY_LENGTH];
-  uint32_t rs;
-  int err = ece_webpush_aesgcm_headers_extract_params(
-    cryptoKeyHeader, encryptionHeader, salt, ECE_SALT_LENGTH, rawSenderPubKey,
-    ECE_WEBPUSH_PUBLIC_KEY_LENGTH, &rs);
-  if (err) {
-    return err;
+  if (rs > UINT32_MAX - ECE_TAG_LENGTH) {
+    return ECE_ERROR_INVALID_RS;
   }
   rs += ECE_TAG_LENGTH;
   return ece_webpush_decrypt(

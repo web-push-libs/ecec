@@ -158,6 +158,14 @@ test_webpush_aesgcm_decrypt_ok() {
   for (size_t i = 0; i < length; i++) {
     webpush_aesgcm_decrypt_ok_test_t t = webpush_aesgcm_decrypt_ok_tests[i];
 
+    uint8_t salt[ECE_SALT_LENGTH];
+    uint8_t rawSenderPubKey[ECE_WEBPUSH_PUBLIC_KEY_LENGTH];
+    uint32_t rs;
+    int err = ece_webpush_aesgcm_headers_extract_params(
+      t.cryptoKey, t.encryption, salt, ECE_SALT_LENGTH, rawSenderPubKey,
+      ECE_WEBPUSH_PUBLIC_KEY_LENGTH, &rs);
+    ece_assert(!err, "Got %d parsing crypto headers", err);
+
     size_t plaintextLen = ece_aesgcm_plaintext_max_length(t.ciphertextLen);
     ece_assert(plaintextLen == t.maxPlaintextLen,
                "Got plaintext max length %zu for `%s`; want %zu", plaintextLen,
@@ -165,10 +173,10 @@ test_webpush_aesgcm_decrypt_ok() {
 
     uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
 
-    int err = ece_webpush_aesgcm_decrypt(
+    err = ece_webpush_aesgcm_decrypt(
       (const uint8_t*) t.recvPrivKey, 32, (const uint8_t*) t.authSecret, 16,
-      t.cryptoKey, t.encryption, (const uint8_t*) t.ciphertext, t.ciphertextLen,
-      plaintext, &plaintextLen);
+      salt, ECE_SALT_LENGTH, rawSenderPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs,
+      (const uint8_t*) t.ciphertext, t.ciphertextLen, plaintext, &plaintextLen);
     ece_assert(!err, "Got %d decrypting ciphertext for `%s`", err, t.desc);
 
     ece_assert(plaintextLen == t.plaintextLen,
@@ -188,6 +196,14 @@ test_webpush_aesgcm_decrypt_err() {
   for (size_t i = 0; i < tests; i++) {
     webpush_aesgcm_decrypt_err_test_t t = webpush_aesgcm_decrypt_err_tests[i];
 
+    uint8_t salt[ECE_SALT_LENGTH];
+    uint8_t rawSenderPubKey[ECE_WEBPUSH_PUBLIC_KEY_LENGTH];
+    uint32_t rs;
+    int err = ece_webpush_aesgcm_headers_extract_params(
+      t.cryptoKey, t.encryption, salt, ECE_SALT_LENGTH, rawSenderPubKey,
+      ECE_WEBPUSH_PUBLIC_KEY_LENGTH, &rs);
+    ece_assert(!err, "Got %d parsing crypto headers", err);
+
     size_t plaintextLen = ece_aesgcm_plaintext_max_length(t.ciphertextLen);
     ece_assert(plaintextLen == t.maxPlaintextLen,
                "Got plaintext max length %zu for `%s`; want %zu", plaintextLen,
@@ -195,10 +211,10 @@ test_webpush_aesgcm_decrypt_err() {
 
     uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
 
-    int err = ece_webpush_aesgcm_decrypt(
+    err = ece_webpush_aesgcm_decrypt(
       (const uint8_t*) t.recvPrivKey, 32, (const uint8_t*) t.authSecret, 16,
-      t.cryptoKey, t.encryption, (const uint8_t*) t.ciphertext, t.ciphertextLen,
-      plaintext, &plaintextLen);
+      salt, ECE_SALT_LENGTH, rawSenderPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs,
+      (const uint8_t*) t.ciphertext, t.ciphertextLen, plaintext, &plaintextLen);
     ece_assert(err == t.err, "Got %d decrypting ciphertext for `%s`; want %d",
                err, t.desc, t.err);
 

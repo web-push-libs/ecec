@@ -350,33 +350,42 @@ ece_aesgcm_plaintext_max_length(size_t ciphertextLen);
 /*!
  * Decrypts a Web Push message encrypted using the "aesgcm" scheme.
  *
- * \sa                          ece_aesgcm_plaintext_max_length()
+ * \sa                           ece_aesgcm_plaintext_max_length()
  *
- * \param rawRecvPrivKey[in]    The subscription private key.
- * \param rawRecvPrivKeyLen[in] The length of the subscription private key. Must
- *                              be `ECE_WEBPUSH_PRIVATE_KEY_LENGTH`.
- * \param authSecret[in]        The authentication secret.
- * \param authSecretLen[in]     The length of the authentication secret. Must be
- *                              `ECE_WEBPUSH_AUTH_SECRET_LENGTH`.
- * \param cryptoKeyHeader[in]   The `Crypto-Key` HTTP header value.
- * \param encryptionHeader[in]  The `Encryption` HTTP header value.
- * \param ciphertext[in]        The ciphertext.
- * \param ciphertextLen[in]     The length of the ciphertext.
- * \param plaintext[in]         An empty array. Must be large enough to hold the
- *                              full plaintext.
- * \param plaintextLen[in,out]  The input is the length of the empty `plaintext`
- *                              array. On success, the output is set to the
- *                              actual plaintext length, and `[0..plaintextLen]`
- *                              contains the plaintext.
+ * \param rawRecvPrivKey[in]     The subscription private key.
+ * \param rawRecvPrivKeyLen[in]  The length of the subscription private key.
+ *                               Must be `ECE_WEBPUSH_PRIVATE_KEY_LENGTH`.
+ * \param authSecret[in]         The authentication secret.
+ * \param authSecretLen[in]      The length of the authentication secret. Must
+ *                               be `ECE_WEBPUSH_AUTH_SECRET_LENGTH`.
+ * \param salt[in]
+ * \param salt[in]               The salt, from the `Encryption` header.
+ * \param saltLen[in]            The length of the salt. Must be
+ *                               `ECE_SALT_LENGTH`.
+ * \param rawSenderPubKey[in]    The sender public key, in uncompressed form,
+ *                               from the `Crypto-Key` header.
+ * \param rawSenderPubKeyLen[in] The length of the sender public key. Must be
+ *                               `ECE_WEBPUSH_PUBLIC_KEY_LENGTH`.
+ * \param rs[in]                 The record size. Must be at least
+ *                               `ECE_AESGCM_MIN_RS`.
+ * \param ciphertext[in]         The ciphertext.
+ * \param ciphertextLen[in]      The length of the ciphertext.
+ * \param plaintext[in]          An empty array. Must be large enough to hold
+ *                               the full plaintext.
+ * \param plaintextLen[in,out]   The input is the length of the empty
+ *                               `plaintext` array. On success, the output is
+ *                               set to the actual plaintext length, and
+ *                               `[0..plaintextLen]` contains the plaintext.
  *
- * \return                      `ECE_OK` on success, or an error code if the
- *                              headers or ciphertext are malformed.
+ * \return                       `ECE_OK` on success, or an error code if the
+ *                               headers or ciphertext are malformed.
  */
 int
 ece_webpush_aesgcm_decrypt(const uint8_t* rawRecvPrivKey,
                            size_t rawRecvPrivKeyLen, const uint8_t* authSecret,
-                           size_t authSecretLen, const char* cryptoKeyHeader,
-                           const char* encryptionHeader,
+                           size_t authSecretLen, const uint8_t* salt,
+                           size_t saltLen, const uint8_t* rawSenderPubKey,
+                           size_t rawSenderPubKeyLen, uint32_t rs,
                            const uint8_t* ciphertext, size_t ciphertextLen,
                            uint8_t* plaintext, size_t* plaintextLen);
 
