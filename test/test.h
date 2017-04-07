@@ -43,6 +43,9 @@ void
 test_webpush_aes128gcm_encrypt_pad(void);
 
 void
+test_aes128gcm_decrypt_ok(void);
+
+void
 test_webpush_aes128gcm_decrypt_ok(void);
 
 void

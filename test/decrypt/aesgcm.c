@@ -132,24 +132,97 @@ static webpush_aesgcm_decrypt_ok_test_t webpush_aesgcm_decrypt_ok_tests[] = {
   },
 };
 
-static webpush_aesgcm_decrypt_err_test_t webpush_aesgcm_decrypt_err_tests[] = {{
-  .desc = "Truncated input",
-  .recvPrivKey = "\xd9\xbb\xb8\xa5\xa3\x80\x65\xb2\xf6\x79\xfd\x6e\xfb\x04"
-                 "\xf3\x38\xdb\x93\x21\xc0\xcf\x73\x4d\x28\xd3\x35\x09\x82"
-                 "\x0e\x3a\x5d\x37",
-  .authSecret =
-    "\x42\x80\xe2\xd2\xee\xaf\x72\xc9\x48\x54\x92\xa2\xa2\xe5\xcc\x5f",
-  // "O hai". The ciphertext is exactly `rs + 16`, without a trailer.
-  .ciphertext = "\x60\x6e\x05\xf9\xbd\x3a\xcb\x9f\x74\x85\x19\x67\x4a\xcc\x3f"
-                "\xbe\xe3\xb0\xeb\x65\x7d\x23\x3f",
-  .cryptoKey = "dh=BD_"
-               "bsTUpxBMvSv8eksith3vijMLj44D4jhJjO51y7wK1ytbUlsyYBBYYyB5AAe5bnR"
-               "EA_WipTgemDVz00LiWcfM",
-  .encryption = "salt=xKWvs_jWWeg4KOsot_uBhA; rs=7",
-  .ciphertextLen = 23,
-  .maxPlaintextLen = 23,
-  .err = ECE_ERROR_DECRYPT_TRUNCATED,
-}};
+static webpush_aesgcm_decrypt_err_test_t webpush_aesgcm_decrypt_err_tests[] = {
+  {
+    .desc = "rs = 7, no trailer",
+    .recvPrivKey = "\xd9\xbb\xb8\xa5\xa3\x80\x65\xb2\xf6\x79\xfd\x6e\xfb\x04"
+                   "\xf3\x38\xdb\x93\x21\xc0\xcf\x73\x4d\x28\xd3\x35\x09\x82"
+                   "\x0e\x3a\x5d\x37",
+    .authSecret =
+      "\x42\x80\xe2\xd2\xee\xaf\x72\xc9\x48\x54\x92\xa2\xa2\xe5\xcc\x5f",
+    // "O hai". The ciphertext is exactly `rs + 16`, without a trailer.
+    .ciphertext = "\x60\x6e\x05\xf9\xbd\x3a\xcb\x9f\x74\x85\x19\x67\x4a\xcc\x3f"
+                  "\xbe\xe3\xb0\xeb\x65\x7d\x23\x3f",
+    .cryptoKey = "dh=BD_"
+                 "bsTUpxBMvSv8eksith3vijMLj44D4jhJjO51y7wK1ytbUlsyYBBYYyB5AAe5b"
+                 "nREA_WipTgemDVz00LiWcfM",
+    .encryption = "salt=xKWvs_jWWeg4KOsot_uBhA; rs=7",
+    .ciphertextLen = 23,
+    .maxPlaintextLen = 23,
+    .err = ECE_ERROR_DECRYPT_TRUNCATED,
+  },
+  {
+    // Last block is only 1 byte; pad length prefix is 2 bytes.
+    .desc = "Pad size > last block length",
+    .recvPrivKey = "\x0a\x8b\x04\x44\x05\x57\x82\xf4\xef\xa2\x1e\xd4\x92\xb4"
+                   "\x42\xd9\x5f\xa2\x5e\x83\x6c\xd1\xb5\xe5\x7b\xd2\x3a\xf2"
+                   "\xac\xe4\x95\xeb",
+    .authSecret =
+      "\x42\xd1\x99\x79\x8f\x0c\x41\xf0\x9a\xab\xe5\xf0\x28\xe5\x46\x05",
+    .ciphertext = "\x26\xf5\xfd\x1e\xc2\x78\x94\xbe\x60\xcc\xff\x3f\xb8\x22\x9c"
+                  "\xea\xcd\x79\x89\x12\x1a\x36\x10\xf8\xa4\x50\xa0\xab\x9f\x9d"
+                  "\x7f\x06\xd4\xa8\x47\x0d\x52\x4a\xaf",
+    .cryptoKey = "dh=BBNZNEi5Ew_ID5S4Y9jWBi1NeVDje6Mjs7SDLViUn6A8VAZj-"
+                 "6X3QAuYQ3j20BblqjwTgYst7PRnY6UGrKyLbmU",
+    .encryption = "salt=ot8hzbwOo6CYe6ZhdlwKtg; rs=6",
+    .ciphertextLen = 39,
+    .maxPlaintextLen = 39,
+    .err = ECE_ERROR_DECRYPT_PADDING,
+  },
+  {
+    // Last block is 1 byte, but claims its pad length is 2.
+    .desc = "Padding length > last block length",
+    .recvPrivKey = "\xf6\x5f\x9a\x85\xc0\x4c\xf8\x8d\x32\x93\x06\xd6\x88\x34"
+                   "\xbd\x29\x1a\xcf\x76\x1c\xaf\x4d\x9d\x12\xc4\xa8\x8f\xa6"
+                   "\x3d\x9a\x79\xa2",
+    .authSecret =
+      "\x80\xa1\xbf\x3f\xaf\x9d\x7b\x9a\x72\xcd\x2f\x21\xc8\x7f\xcd\xc9",
+    .ciphertext = "\xa1\x64\x8e\x14\x0f\x94\x3b\x9a\x16\xab\xe9\x08\xef\xd4\x47"
+                  "\x68\x57\xf0\x01\xe8\xcb\x89\x02\x78\x0b\xb7\x93\x9a\xb4\x93"
+                  "\x06\x5e\x20\x02\xb2\xd7\x7f\x1e\xe5\x67\xe6",
+    .cryptoKey = "dh=BKe2IBO_cwmEzQyTVscSbQcj0Y3uBSzGZ_mHlANMciS8uGpb7U8_"
+                 "Bw7TNdlYfpwWDLd0cxM8YYWNDbNJ_p2Rp4o",
+    .encryption = "salt=z7QJ6UR89SiFRkd4RsC4Vg; rs=6",
+    .ciphertextLen = 41,
+    .maxPlaintextLen = 41,
+    .err = ECE_ERROR_DECRYPT_PADDING,
+  },
+  {
+    // First block has no padding, but claims its pad length is 1.
+    .desc = "Non-zero padding",
+    .recvPrivKey = "\x23\x3b\x9a\xc4\xba\x85\x26\x68\xd2\xbb\xc1\xa3\x2c\x2a"
+                   "\x36\xa0\x46\x83\x66\x30\xc1\xba\xd5\xb8\x9b\x84\xf4\xab"
+                   "\x1d\x36\x5e\xc3",
+    .authSecret =
+      "\x70\xca\x56\x41\x6e\x7c\x06\xba\x43\x6c\x9f\x0a\xa9\xb4\xbd\x8a",
+    .ciphertext = "\x41\xdb\xe3\x87\x42\xe4\x65\x72\xae\xff\x51\xef\xbf\x9e\x83"
+                  "\xd2\xb3\x92\x17\xa3\x30\xc3\x7c\xb4\x17\xcc\x64\xc5\x43\x65"
+                  "\xc1\x5b\xb6\x53\x58\x9a\x90\xe5\x14\x19\x1b",
+    .cryptoKey = "dh=BBicj01QI0ryiFzAaty9VpW_crgq9XbU1bOCtEZI9UNE6tuOgp4lyN_"
+                 "UN0N905ECnLWK5v_sCPUIxnQgOuCseSo",
+    .encryption = "salt=SbkGHONbQBBsBcj9dLyIUw; rs=6",
+    .ciphertextLen = 41,
+    .maxPlaintextLen = 41,
+    .err = ECE_ERROR_DECRYPT_PADDING,
+  },
+  {
+    .desc = "rs = 6, auth tag for last record",
+    .recvPrivKey = "\x9e\x13\x93\xf7\x5e\xf5\xc6\xea\x10\x04\x91\xa4\x89\x9d"
+                   "\xda\xa9\x3e\x6a\xc3\xf2\x0b\x27\xde\x3f\x3c\xf8\x95\x36"
+                   "\xed\x4b\x15\x26",
+    .authSecret =
+      "\xde\xb5\xa1\xb1\x10\x94\xfc\xa7\x5a\xa9\xf2\x8f\x6d\xdd\xf3\x05",
+    .ciphertext = "\x0b\xbb\xb7\x8f\x90\x0b\xe1\x8c\xe1\xdb\x26\x01\xfe\xe9\x8d"
+                  "\xea\xdc\xeb\x54\x7c\x6b\xb7\xb0\xf9\x6d\xa4\xc4\x5b\xd0\xc4"
+                  "\xd4\x19\x37\xba\x9f\x5f\x63\x8c",
+    .cryptoKey = "dh=BI38Qs_OhDmQIxbszc6Nako-MrX3FzAE_8HzxM1wgoEIG4ocxyF-"
+                 "YAAVhfkpJUvDpRyKW2LDHIaoylaZuxQfRhE",
+    .encryption = "salt=QClh48OlvGpSjZ0Mg0e8rg; rs=6",
+    .ciphertextLen = 38,
+    .maxPlaintextLen = 38,
+    .err = ECE_ERROR_SHORT_BLOCK,
+  },
+};
 
 void
 test_webpush_aesgcm_decrypt_ok(void) {
