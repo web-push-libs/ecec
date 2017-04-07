@@ -226,26 +226,23 @@ end:
 static int
 ece_aesgcm_unpad(uint8_t* block, bool lastRecord, size_t* blockLen) {
   ECE_UNUSED(lastRecord);
-  if (*blockLen < 2) {
+  if (*blockLen < ECE_AESGCM_PAD_SIZE) {
     return ECE_ERROR_DECRYPT_PADDING;
   }
   uint16_t padLen = ece_read_uint16_be(block);
-  if (padLen >= *blockLen) {
+  if (padLen > *blockLen - ECE_AESGCM_PAD_SIZE) {
     return ECE_ERROR_DECRYPT_PADDING;
   }
-  // In "aesgcm", the content is offset by the pad size and padding.
-  size_t offset = padLen + 2;
-  const uint8_t* pad = &block[2];
-  while (pad < &block[offset]) {
-    if (*pad) {
+  for (size_t i = 0; i < padLen; i++) {
+    if (block[ECE_AESGCM_PAD_SIZE + i]) {
       // All padding bytes must be zero.
       return ECE_ERROR_DECRYPT_PADDING;
     }
-    pad++;
   }
   // Move the unpadded contents to the start of the block.
-  *blockLen -= offset;
-  memmove(block, pad, *blockLen);
+  size_t plaintextStart = ECE_AESGCM_PAD_SIZE + padLen;
+  *blockLen -= plaintextStart;
+  memmove(block, &block[plaintextStart], *blockLen);
   return ECE_OK;
 }
 
