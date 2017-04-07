@@ -366,7 +366,11 @@ ece_aes128gcm_payload_extract_params(const uint8_t* payload, size_t payloadLen,
   }
 
   *salt = payload;
-  *keyId = &payload[ECE_AES128GCM_HEADER_LENGTH];
+  if (keyIdLen) {
+    *keyId = &payload[ECE_AES128GCM_HEADER_LENGTH];
+  } else {
+    *keyId = NULL;
+  }
   *ciphertext = &payload[payloadStart];
 
   return ECE_OK;
