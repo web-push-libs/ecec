@@ -145,12 +145,22 @@ static aes128gcm_ok_decrypt_test_t aes128gcm_ok_decrypt_tests[] = {
       "\x8d\x2f\x7d\xe0\xaf\x1d\xd7\x61\x27\x9d\xd3\xf2\x8a\xce\x13\x74\x73\x15"
       "\x11\xf2\x1a",
     .payloadLen = 903,
-    .maxPlaintextLen = 82,
+    .maxPlaintextLen = 98,
     .plaintextLen = 41,
   },
 };
 
 static aes128gcm_err_decrypt_test_t aes128gcm_err_decrypt_tests[] = {
+  {
+    .desc = "Truncated ciphertext, rs = 18",
+    .ikm = "\x28\xc0\x66\x11\x4a\x2d\xa5\x21\xca\x89\xf4\x21\x9d\xa8\xac\xc0",
+    .payload = "\x1f\xc2\xec\x59\x4d\xbd\xa8\xc8\xab\x26\x25\x47\x04\x65\xb8"
+               "\xcd\x00\x00\x00\x12\x00\x92\x56\xfe\x1c\x43\x4f\x71\x8e\x85"
+               "\x16\x3a\x0f\x52\x69\xc1\xb8\x24\x55",
+    .payloadLen = 40,
+    .maxPlaintextLen = 0,
+    .err = ECE_ERROR_DECRYPT,
+  },
   {
     .desc = "rs <= block overhead",
     .ikm = "\x2f\xb1\x75\xc2\x71\xb9\x2f\x6b\x55\xe4\xf2\xa2\x52\xd1\x45\x43",
@@ -180,7 +190,7 @@ static aes128gcm_err_decrypt_test_t aes128gcm_err_decrypt_tests[] = {
                "\x2f\x48\xc1\xc3\x32\x04\xb1\x95\xb5\x4e\x9e\x70\xd4\x0e\x3c"
                "\xf3\xef\x0c\x67\x1b\xe0\x14\x49\x7e\xdc",
     .payloadLen = 85,
-    .maxPlaintextLen = 16,
+    .maxPlaintextLen = 32,
     .err = ECE_ERROR_DECRYPT_PADDING,
   },
   {

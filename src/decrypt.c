@@ -7,28 +7,28 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 
-typedef size_t (*max_decrypted_length_t)(uint32_t rs, size_t ciphertextLen);
-
 typedef int (*unpad_t)(uint8_t* block, bool lastRecord, size_t* blockLen);
 
-// Returns the maximum decrypted length of an "aes128gcm" ciphertext.
+// Calculates the maximum plaintext length, including room for the padding
+// delimiter and padding.
 static inline size_t
-ece_aes128gcm_max_decrypted_length(uint32_t rs, size_t ciphertextLen) {
-  if (rs < ECE_AES128GCM_MIN_RS) {
+ece_plaintext_max_length(uint32_t rs, size_t padSize, size_t ciphertextLen) {
+  size_t overhead = padSize + ECE_TAG_LENGTH;
+  if (rs <= overhead) {
     return 0;
   }
-  size_t numRecords = (ciphertextLen / rs) + 1;
-  if (numRecords > SIZE_MAX / ECE_TAG_LENGTH) {
+  size_t numRecords = ciphertextLen / rs;
+  if (ciphertextLen % rs) {
+    // A smaller final record is expected for "aes128gcm", and required for
+    // "aesgcm".
+    numRecords++;
+  }
+  if (numRecords > ciphertextLen / ECE_TAG_LENGTH) {
+    // Each record includes a trailing auth tag at the end. If the number of
+    // records exceeds the number of tags, the ciphertext is truncated.
     return 0;
   }
   return ciphertextLen - (ECE_TAG_LENGTH * numRecords);
-}
-
-// Returns the maximum decrypted length of an "aesgcm" ciphertext.
-static size_t
-ece_aesgcm_max_decrypted_length(uint32_t rs, size_t ciphertextLen) {
-  ECE_UNUSED(rs);
-  return ciphertextLen;
 }
 
 // Extracts an unsigned 16-bit integer in network byte order.
@@ -79,15 +79,19 @@ ece_decrypt_record(EVP_CIPHER_CTX* ctx, const uint8_t* key, const uint8_t* iv,
 
 static int
 ece_decrypt_records(const uint8_t* key, const uint8_t* nonce, uint32_t rs,
-                    const uint8_t* ciphertext, size_t ciphertextLen,
-                    max_decrypted_length_t maxDecryptedLen, unpad_t unpad,
-                    uint8_t* plaintext, size_t* plaintextLen) {
+                    size_t padSize, const uint8_t* ciphertext,
+                    size_t ciphertextLen, unpad_t unpad, uint8_t* plaintext,
+                    size_t* plaintextLen) {
   int err = ECE_OK;
 
   EVP_CIPHER_CTX* ctx = NULL;
 
   // Make sure the plaintext array is large enough to hold the full plaintext.
-  size_t maxPlaintextLen = maxDecryptedLen(rs, ciphertextLen);
+  size_t maxPlaintextLen = ece_plaintext_max_length(rs, padSize, ciphertextLen);
+  if (!maxPlaintextLen) {
+    err = ECE_ERROR_DECRYPT;
+    goto end;
+  }
   if (*plaintextLen < maxPlaintextLen) {
     err = ECE_ERROR_OUT_OF_MEMORY;
     goto end;
@@ -162,10 +166,9 @@ ece_webpush_decrypt(const uint8_t* rawRecvPrivKey, size_t rawRecvPrivKeyLen,
                     const uint8_t* authSecret, size_t authSecretLen,
                     const uint8_t* salt, size_t saltLen,
                     const uint8_t* rawSenderPubKey, size_t rawSenderPubKeyLen,
-                    uint32_t rs, const uint8_t* ciphertext,
+                    uint32_t rs, size_t padSize, const uint8_t* ciphertext,
                     size_t ciphertextLen, needs_trailer_t needsTrailer,
-                    derive_key_and_nonce_t deriveKeyAndNonce,
-                    max_decrypted_length_t maxDecryptedLen, unpad_t unpad,
+                    derive_key_and_nonce_t deriveKeyAndNonce, unpad_t unpad,
                     uint8_t* plaintext, size_t* plaintextLen) {
   int err = ECE_OK;
 
@@ -210,8 +213,8 @@ ece_webpush_decrypt(const uint8_t* rawRecvPrivKey, size_t rawRecvPrivKeyLen,
     goto end;
   }
 
-  err = ece_decrypt_records(key, nonce, rs, ciphertext, ciphertextLen,
-                            maxDecryptedLen, unpad, plaintext, plaintextLen);
+  err = ece_decrypt_records(key, nonce, rs, padSize, ciphertext, ciphertextLen,
+                            unpad, plaintext, plaintextLen);
 
 end:
   EC_KEY_free(recvPrivKey);
@@ -323,12 +326,16 @@ ece_aes128gcm_plaintext_max_length(const uint8_t* payload, size_t payloadLen) {
   if (err) {
     return 0;
   }
-  return ece_aes128gcm_max_decrypted_length(rs, ciphertextLen);
+  return ece_plaintext_max_length(rs, ECE_AES128GCM_PAD_SIZE, ciphertextLen);
 }
 
 size_t
-ece_aesgcm_plaintext_max_length(size_t ciphertextLen) {
-  return ciphertextLen;
+ece_aesgcm_plaintext_max_length(uint32_t rs, size_t ciphertextLen) {
+  if (rs > UINT32_MAX - ECE_TAG_LENGTH) {
+    return 0;
+  }
+  rs += ECE_TAG_LENGTH;
+  return ece_plaintext_max_length(rs, ECE_AESGCM_PAD_SIZE, ciphertextLen);
 }
 
 int
@@ -355,9 +362,9 @@ ece_aes128gcm_decrypt(const uint8_t* ikm, size_t ikmLen, const uint8_t* payload,
   if (err) {
     return err;
   }
-  return ece_decrypt_records(key, nonce, rs, ciphertext, ciphertextLen,
-                             &ece_aes128gcm_max_decrypted_length,
-                             &ece_aes128gcm_unpad, plaintext, plaintextLen);
+  return ece_decrypt_records(key, nonce, rs, ECE_AES128GCM_PAD_SIZE, ciphertext,
+                             ciphertextLen, &ece_aes128gcm_unpad, plaintext,
+                             plaintextLen);
 }
 
 int
@@ -381,10 +388,10 @@ ece_webpush_aes128gcm_decrypt(const uint8_t* rawRecvPrivKey,
   }
   return ece_webpush_decrypt(
     rawRecvPrivKey, rawRecvPrivKeyLen, authSecret, authSecretLen, salt, saltLen,
-    rawSenderPubKey, rawSenderPubKeyLen, rs, ciphertext, ciphertextLen,
-    &ece_aes128gcm_needs_trailer, &ece_webpush_aes128gcm_derive_key_and_nonce,
-    &ece_aes128gcm_max_decrypted_length, &ece_aes128gcm_unpad, plaintext,
-    plaintextLen);
+    rawSenderPubKey, rawSenderPubKeyLen, rs, ECE_AES128GCM_PAD_SIZE, ciphertext,
+    ciphertextLen, &ece_aes128gcm_needs_trailer,
+    &ece_webpush_aes128gcm_derive_key_and_nonce, &ece_aes128gcm_unpad,
+    plaintext, plaintextLen);
 }
 
 int
@@ -402,7 +409,7 @@ ece_webpush_aesgcm_decrypt(const uint8_t* rawRecvPrivKey,
   return ece_webpush_decrypt(
     rawRecvPrivKey, rawRecvPrivKeyLen, authSecret, authSecretLen, salt,
     ECE_SALT_LENGTH, rawSenderPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs,
-    ciphertext, ciphertextLen, &ece_aesgcm_needs_trailer,
-    &ece_webpush_aesgcm_derive_key_and_nonce, &ece_aesgcm_max_decrypted_length,
-    &ece_aesgcm_unpad, plaintext, plaintextLen);
+    ECE_AESGCM_PAD_SIZE, ciphertext, ciphertextLen, &ece_aesgcm_needs_trailer,
+    &ece_webpush_aesgcm_derive_key_and_nonce, &ece_aesgcm_unpad, plaintext,
+    plaintextLen);
 }

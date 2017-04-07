@@ -44,7 +44,7 @@ static webpush_aesgcm_decrypt_ok_test_t webpush_aesgcm_decrypt_ok_tests[] = {
                  "DKiLh4LNKPtj0BOXGdr-IQ-QP82Wjo",
     .encryption = "salt=zCU18Rw3A5aB_Xi-vfixmA; rs=24",
     .ciphertextLen = 30,
-    .maxPlaintextLen = 30,
+    .maxPlaintextLen = 14,
     .plaintextLen = 12,
   },
   {
@@ -69,7 +69,7 @@ static webpush_aesgcm_decrypt_ok_test_t webpush_aesgcm_decrypt_ok_tests[] = {
                  "HBlLpkjgCpjPL5c-GL9uBGIfa_fhGNKKFhXz1k9Kyens2ZpQ",
     .encryption = "salt=ZFhzj0S-n29g9P2p4-I7tA; rs=8",
     .ciphertextLen = 143,
-    .maxPlaintextLen = 143,
+    .maxPlaintextLen = 47,
     .plaintextLen = 19,
   },
   {
@@ -107,7 +107,7 @@ static webpush_aesgcm_decrypt_ok_test_t webpush_aesgcm_decrypt_ok_tests[] = {
                  "fYHBP4ObxwJNl56bk",
     .encryption = "salt=5LIDBXbvkBvvb7ZdD-T4PQ; rs=3",
     .ciphertextLen = 341,
-    .maxPlaintextLen = 341,
+    .maxPlaintextLen = 53,
     .plaintextLen = 17,
   },
   {
@@ -127,7 +127,7 @@ static webpush_aesgcm_decrypt_ok_test_t webpush_aesgcm_decrypt_ok_tests[] = {
                  "aqxYaQ1G8BqkXCJ6DPpDrWtdWj_mugHU\"",
     .encryption = "keyid=\"dhkey\"; salt=\"lngarbyKfMoi9Z75xYXmkg\"",
     .ciphertextLen = 33,
-    .maxPlaintextLen = 33,
+    .maxPlaintextLen = 17,
     .plaintextLen = 15,
   },
 };
@@ -148,7 +148,7 @@ static webpush_aesgcm_decrypt_err_test_t webpush_aesgcm_decrypt_err_tests[] = {
                  "nREA_WipTgemDVz00LiWcfM",
     .encryption = "salt=xKWvs_jWWeg4KOsot_uBhA; rs=7",
     .ciphertextLen = 23,
-    .maxPlaintextLen = 23,
+    .maxPlaintextLen = 7,
     .err = ECE_ERROR_DECRYPT_TRUNCATED,
   },
   {
@@ -166,7 +166,7 @@ static webpush_aesgcm_decrypt_err_test_t webpush_aesgcm_decrypt_err_tests[] = {
                  "6X3QAuYQ3j20BblqjwTgYst7PRnY6UGrKyLbmU",
     .encryption = "salt=ot8hzbwOo6CYe6ZhdlwKtg; rs=6",
     .ciphertextLen = 39,
-    .maxPlaintextLen = 39,
+    .maxPlaintextLen = 7,
     .err = ECE_ERROR_DECRYPT_PADDING,
   },
   {
@@ -184,7 +184,7 @@ static webpush_aesgcm_decrypt_err_test_t webpush_aesgcm_decrypt_err_tests[] = {
                  "Bw7TNdlYfpwWDLd0cxM8YYWNDbNJ_p2Rp4o",
     .encryption = "salt=z7QJ6UR89SiFRkd4RsC4Vg; rs=6",
     .ciphertextLen = 41,
-    .maxPlaintextLen = 41,
+    .maxPlaintextLen = 9,
     .err = ECE_ERROR_DECRYPT_PADDING,
   },
   {
@@ -202,7 +202,7 @@ static webpush_aesgcm_decrypt_err_test_t webpush_aesgcm_decrypt_err_tests[] = {
                  "UN0N905ECnLWK5v_sCPUIxnQgOuCseSo",
     .encryption = "salt=SbkGHONbQBBsBcj9dLyIUw; rs=6",
     .ciphertextLen = 41,
-    .maxPlaintextLen = 41,
+    .maxPlaintextLen = 9,
     .err = ECE_ERROR_DECRYPT_PADDING,
   },
   {
@@ -219,7 +219,7 @@ static webpush_aesgcm_decrypt_err_test_t webpush_aesgcm_decrypt_err_tests[] = {
                  "YAAVhfkpJUvDpRyKW2LDHIaoylaZuxQfRhE",
     .encryption = "salt=QClh48OlvGpSjZ0Mg0e8rg; rs=6",
     .ciphertextLen = 38,
-    .maxPlaintextLen = 38,
+    .maxPlaintextLen = 6,
     .err = ECE_ERROR_SHORT_BLOCK,
   },
 };
@@ -243,7 +243,7 @@ test_webpush_aesgcm_decrypt_ok(void) {
       ECE_WEBPUSH_PUBLIC_KEY_LENGTH, &rs);
     ece_assert(!err, "Got %d parsing crypto headers", err);
 
-    size_t plaintextLen = ece_aesgcm_plaintext_max_length(t.ciphertextLen);
+    size_t plaintextLen = ece_aesgcm_plaintext_max_length(rs, t.ciphertextLen);
     ece_assert(plaintextLen == t.maxPlaintextLen,
                "Got plaintext max length %zu for `%s`; want %zu", plaintextLen,
                t.desc, t.maxPlaintextLen);
@@ -286,7 +286,7 @@ test_webpush_aesgcm_decrypt_err(void) {
       ECE_WEBPUSH_PUBLIC_KEY_LENGTH, &rs);
     ece_assert(!err, "Got %d parsing crypto headers", err);
 
-    size_t plaintextLen = ece_aesgcm_plaintext_max_length(t.ciphertextLen);
+    size_t plaintextLen = ece_aesgcm_plaintext_max_length(rs, t.ciphertextLen);
     ece_assert(plaintextLen == t.maxPlaintextLen,
                "Got plaintext max length %zu for `%s`; want %zu", plaintextLen,
                t.desc, t.maxPlaintextLen);

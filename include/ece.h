@@ -342,12 +342,14 @@ ece_webpush_aesgcm_encrypt_with_keys(
  *
  * \sa                      ece_webpush_aesgcm_decrypt()
  *
+ * \param rs[in]            The record size. Must be at least
+ *                          `ECE_AESGCM_MIN_RS`.
  * \param ciphertextLen[in] The ciphertext length.
  *
  * \return                  The maximum plaintext size.
  */
 size_t
-ece_aesgcm_plaintext_max_length(size_t ciphertextLen);
+ece_aesgcm_plaintext_max_length(uint32_t rs, size_t ciphertextLen);
 
 /*!
  * Decrypts a Web Push message encrypted using the "aesgcm" scheme.
