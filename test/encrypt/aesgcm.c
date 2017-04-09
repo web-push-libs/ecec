@@ -1,6 +1,9 @@
 #include "test.h"
 
+#include <stdlib.h>
 #include <string.h>
+
+#include <openssl/rand.h>
 
 typedef struct webpush_aesgcm_encrypt_ok_test_s {
   const char* desc;
@@ -10,11 +13,11 @@ typedef struct webpush_aesgcm_encrypt_ok_test_s {
   const char* authSecret;
   const char* salt;
   const char* plaintext;
+  size_t plaintextLen;
+  size_t padLen;
   size_t maxCiphertextLen;
   size_t ciphertextLen;
-  size_t plaintextLen;
   uint32_t rs;
-  uint8_t pad;
 } webpush_aesgcm_encrypt_ok_test_t;
 
 static webpush_aesgcm_encrypt_ok_test_t webpush_aesgcm_encrypt_ok_tests[] = {
@@ -35,14 +38,14 @@ static webpush_aesgcm_encrypt_ok_test_t webpush_aesgcm_encrypt_ok_tests[] = {
       "\x47\x6f\x6f\x20\x67\x6f\x6f\x20\x67\x27\x20\x6a\x6f\x6f\x62\x21",
     .salt = "\x96\x78\x1a\xad\xbc\x8a\x7c\xca\x22\xf5\x9e\xf9\xc5\x85\xe6\x92",
     .plaintext = "I am the walrus",
+    .plaintextLen = 15,
+    .padLen = 0,
     .maxCiphertextLen = 33,
     .ciphertextLen = 33,
-    .plaintextLen = 15,
     .rs = 4096,
-    .pad = 0,
   },
   {
-    .desc = "rs = 4 with trailer",
+    .desc = "rs = 4, trailer",
     .ciphertext =
       "\xe8\x7d\x81\x05\x8d\x25\xd1\xdb\xfc\xf3\x1c\x5d\x52\xd4\x39\x51\xb4"
       "\x7c\x63\x07\x4d\x6d\xb3\xf0\xaf\x89\xe4\xb3\xae\x64\x3d\x00\xb5\xce"
@@ -85,11 +88,36 @@ static webpush_aesgcm_encrypt_ok_test_t webpush_aesgcm_encrypt_ok_tests[] = {
       "\xd3\xf8\x22\xf4\x8c\x74\x74\x19\x5d\xa6\x4d\x78\x5f\x40\x8f\x26",
     .salt = "\x77\x10\x67\x4b\x1e\xcd\x0b\xf7\xa7\xd3\x25\x88\xea\xe9\x53\x9c",
     .plaintext = "I am the very model of a modern Major-General.",
+    .plaintextLen = 46,
+    .padLen = 0,
     .maxCiphertextLen = 478,
     .ciphertextLen = 478,
-    .plaintextLen = 46,
     .rs = 4,
-    .pad = 0,
+  },
+  {
+    .desc = "rs = 6, pad = 4",
+    .ciphertext = "\x54\x6d\x13\x0b\x1e\xf0\xc2\x3e\xff\x49\x87\xe5\xc6\x57\xf1"
+                  "\x94\xb1\xb8\xad\x5a\xda\xb7\x02\x32\x3c\xf9\xc0\x7b\xd8\x28"
+                  "\x20\x9e\x5d\xe7\x5e\x8b\xf6\x6a\xa5\xf8\xf6\x3b\x0a\x66\xd3"
+                  "\x99\xeb\x8b\x98\x70\x6c\xfc\xa5\xa5\x3f\x8f\x50\x8c\x26\x56"
+                  "\x5a\x34\xe4",
+    .senderPrivKey = "\xe3\x31\x8e\xc3\x99\xa9\xc4\x71\x7a\xa9\x4b\xa4\xed\xb3"
+                     "\xaa\x1d\x90\x96\x5c\xe7\x6a\x57\x6b\x52\xa0\x7c\x27\x44"
+                     "\x0c\x6d\x9b\xd1",
+    .recvPubKey = "\x04\xaa\xec\x79\x05\x22\xad\x2b\x70\x56\x05\x58\x99\xda\xa6"
+                  "\x47\x7d\x55\xab\x3f\x16\x5d\x76\x00\x56\x19\xf3\xdf\xa9\x72"
+                  "\x19\xf5\x59\x02\x5d\x09\xc0\x80\x83\x70\xc6\x06\x8a\x66\x51"
+                  "\x81\xd4\x3d\x74\xac\x3d\x0a\xca\x28\x67\x5e\x81\x55\x9a\x20"
+                  "\x4a\x6d\x44\xb5\x91",
+    .authSecret =
+      "\x54\x9d\xe2\xfd\x40\x52\xef\x4e\x05\x28\x45\x13\x3e\x37\x61\x3d",
+    .salt = "\x3a\x4b\xd3\x72\x75\x09\x5d\x71\xc9\x81\xe0\x9c\xde\x0d\xa6\x2a",
+    .plaintext = "Hello",
+    .plaintextLen = 5,
+    .padLen = 4,
+    .maxCiphertextLen = 63,
+    .ciphertextLen = 63,
+    .rs = 6,
   },
 };
 
@@ -100,8 +128,14 @@ test_webpush_aesgcm_encrypt_ok(void) {
   for (size_t i = 0; i < tests; i++) {
     webpush_aesgcm_encrypt_ok_test_t t = webpush_aesgcm_encrypt_ok_tests[i];
 
+    const void* senderPrivKey = t.senderPrivKey;
+    const void* authSecret = t.authSecret;
+    const void* salt = t.salt;
+    const void* recvPubKey = t.recvPubKey;
+    const void* plaintext = t.plaintext;
+
     size_t ciphertextLen =
-      ece_aesgcm_ciphertext_max_length(t.rs, t.pad, t.plaintextLen);
+      ece_aesgcm_ciphertext_max_length(t.rs, t.padLen, t.plaintextLen);
     ece_assert(ciphertextLen == t.maxCiphertextLen,
                "Got ciphertext max length %zu for `%s`; want %zu",
                ciphertextLen, t.desc, t.maxCiphertextLen);
@@ -109,10 +143,8 @@ test_webpush_aesgcm_encrypt_ok(void) {
     uint8_t* ciphertext = calloc(ciphertextLen, sizeof(uint8_t));
 
     int err = ece_webpush_aesgcm_encrypt_with_keys(
-      (const uint8_t*) t.senderPrivKey, 32, (const uint8_t*) t.authSecret, 16,
-      (const uint8_t*) t.salt, 16, (const uint8_t*) t.recvPubKey, 65, t.rs,
-      t.pad, (const uint8_t*) t.plaintext, t.plaintextLen, ciphertext,
-      &ciphertextLen);
+      senderPrivKey, 32, authSecret, 16, salt, 16, recvPubKey, 65, t.rs,
+      t.padLen, plaintext, t.plaintextLen, ciphertext, &ciphertextLen);
     ece_assert(!err, "Got %d encrypting ciphertext for `%s`", err, t.desc);
 
     ece_assert(ciphertextLen == t.ciphertextLen,
@@ -121,6 +153,61 @@ test_webpush_aesgcm_encrypt_ok(void) {
     ece_assert(!memcmp(ciphertext, t.ciphertext, ciphertextLen),
                "Wrong ciphertext for `%s`", t.desc);
 
+    free(ciphertext);
+  }
+}
+
+void
+test_webpush_aesgcm_encrypt_pad(void) {
+  static const uint32_t maxRs = 128;
+
+  const void* senderPrivKey = "\xac\xae\xc1\xc3\x7c\x30\x7c\xb9\x02\x8f\xbb\xd9"
+                              "\xc7\xf3\xc6\x89\x26\x60\x08\x95\x9a\x5e\xd4\x03"
+                              "\x42\x21\xb2\xda\x72\x01\x82\x8f";
+  const void* authSecret =
+    "\x44\x29\x81\x2d\x53\x5f\xbf\xdb\xea\xc8\x6d\xb7\x14\x5c\x6a\xf2";
+  const void* salt =
+    "\x45\x2b\xfb\xea\x8c\xc7\xa7\x57\x14\xd2\x03\xcf\xf1\x02\xe8\x76";
+  const void* recvPubKey =
+    "\x04\x2d\x78\x8d\x3e\x8e\x82\xf2\xd7\xea\xef\xbd\xe3\xa1\xbe\xde\xa2\x1f"
+    "\x3b\xc9\x60\x33\x15\x73\x22\xa0\x9e\x14\x46\x55\xa3\xdf\x78\xfd\xca\xc8"
+    "\x10\xe3\x02\x2a\xb5\x6a\x0e\xa9\xb8\xec\x06\x73\x8a\xce\x41\x1f\x49\x54"
+    "\x7b\xc0\x0d\x1a\x1c\xde\x97\xce\x7b\xdd\x26";
+
+  for (uint32_t rs = ECE_AESGCM_MIN_RS + 1; rs <= maxRs; rs++) {
+    // Generate a random plaintext.
+    size_t plaintextLen = (size_t)(rand() % (maxRs - 1) + 1);
+    uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
+    int ok = RAND_bytes(plaintext, (int) plaintextLen);
+    ece_assert(ok == 1, "Got %d generating plaintext for rs = %d", ok, rs);
+
+    size_t maxPadLen = (rs - ECE_AESGCM_MIN_RS) * (plaintextLen + 1);
+
+    // Encrypting with the maximum padding length should succeed.
+    size_t ciphertextLen =
+      ece_aesgcm_ciphertext_max_length(rs, maxPadLen, plaintextLen);
+    uint8_t* ciphertext = calloc(ciphertextLen, sizeof(uint8_t));
+
+    int err = ece_webpush_aesgcm_encrypt_with_keys(
+      senderPrivKey, 32, authSecret, 16, salt, 16, recvPubKey, 65, rs,
+      maxPadLen, plaintext, plaintextLen, ciphertext, &ciphertextLen);
+    ece_assert(!err, "Got %d encrypting with rs = %d, padLen = %zu", err, rs,
+               maxPadLen);
+
+    // Adding more padding should fail.
+    size_t badPadLen = maxPadLen + 1;
+    ciphertextLen =
+      ece_aesgcm_ciphertext_max_length(rs, badPadLen, plaintextLen);
+    ciphertext = realloc(ciphertext, ciphertextLen);
+
+    err = ece_webpush_aesgcm_encrypt_with_keys(
+      senderPrivKey, 32, authSecret, 16, salt, 16, recvPubKey, 65, rs,
+      badPadLen, plaintext, plaintextLen, ciphertext, &ciphertextLen);
+    ece_assert(err == ECE_ERROR_ENCRYPT_PADDING,
+               "Want error encrypting with rs = %d, padLen = %zu", rs,
+               badPadLen);
+
+    free(plaintext);
     free(ciphertext);
   }
 }

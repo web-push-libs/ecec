@@ -8,9 +8,6 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 
-#define ECE_AES128GCM_PAD_SIZE 1
-#define ECE_AESGCM_PAD_SIZE 2
-
 typedef size_t (*min_block_pad_length_t)(size_t padLen, size_t dataPerBlock);
 
 typedef int (*encrypt_block_t)(EVP_CIPHER_CTX* ctx,

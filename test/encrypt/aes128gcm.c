@@ -2,6 +2,8 @@
 
 #include <string.h>
 
+#include <openssl/rand.h>
+
 typedef struct webpush_aes128gcm_encrypt_ok_test_s {
   const char* desc;
   const char* payload;
@@ -299,6 +301,62 @@ test_webpush_aes128gcm_encrypt_ok(void) {
     ece_assert(!memcmp(payload, t.payload, payloadLen),
                "Wrong payload for `%s`", t.desc);
 
+    free(payload);
+  }
+}
+
+void
+test_webpush_aes128gcm_encrypt_pad(void) {
+  static const uint32_t maxRs = 128;
+
+  const void* senderPrivKey = "\xac\xae\xc1\xc3\x7c\x30\x7c\xb9\x02\x8f\xbb\xd9"
+                              "\xc7\xf3\xc6\x89\x26\x60\x08\x95\x9a\x5e\xd4\x03"
+                              "\x42\x21\xb2\xda\x72\x01\x82\x8f";
+  const void* authSecret =
+    "\x44\x29\x81\x2d\x53\x5f\xbf\xdb\xea\xc8\x6d\xb7\x14\x5c\x6a\xf2";
+  const void* salt =
+    "\x45\x2b\xfb\xea\x8c\xc7\xa7\x57\x14\xd2\x03\xcf\xf1\x02\xe8\x76";
+  const void* recvPubKey =
+    "\x04\x2d\x78\x8d\x3e\x8e\x82\xf2\xd7\xea\xef\xbd\xe3\xa1\xbe\xde\xa2\x1f"
+    "\x3b\xc9\x60\x33\x15\x73\x22\xa0\x9e\x14\x46\x55\xa3\xdf\x78\xfd\xca\xc8"
+    "\x10\xe3\x02\x2a\xb5\x6a\x0e\xa9\xb8\xec\x06\x73\x8a\xce\x41\x1f\x49\x54"
+    "\x7b\xc0\x0d\x1a\x1c\xde\x97\xce\x7b\xdd\x26";
+
+  // For rs = `ECE_AES128GCM_MIN_RS`, we allow any amount of padding, because we
+  // can only include one byte of data per record.
+  for (uint32_t rs = ECE_AES128GCM_MIN_RS + 1; rs <= maxRs; rs++) {
+    // Generate a random plaintext.
+    size_t plaintextLen = (size_t)(rand() % (maxRs - 1) + 1);
+    uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
+    int ok = RAND_bytes(plaintext, (int) plaintextLen);
+    ece_assert(ok == 1, "Got %d generating plaintext for rs = %d", ok, rs);
+
+    size_t maxPadLen = (rs - ECE_AES128GCM_MIN_RS) * (plaintextLen + 1);
+
+    // Encrypting with the maximum padding length should succeed.
+    size_t payloadLen =
+      ece_aes128gcm_payload_max_length(rs, maxPadLen, plaintextLen);
+    uint8_t* payload = calloc(payloadLen, sizeof(uint8_t));
+
+    int err = ece_aes128gcm_encrypt_with_keys(
+      senderPrivKey, 32, authSecret, 16, salt, 16, recvPubKey, 65, rs,
+      maxPadLen, plaintext, plaintextLen, payload, &payloadLen);
+    ece_assert(!err, "Got %d encrypting with rs = %d, padLen = %zu", err, rs,
+               maxPadLen);
+
+    // Adding more padding should fail.
+    size_t badPadLen = maxPadLen + 1;
+    payloadLen = ece_aes128gcm_payload_max_length(rs, badPadLen, plaintextLen);
+    payload = realloc(payload, payloadLen);
+
+    err = ece_aes128gcm_encrypt_with_keys(
+      senderPrivKey, 32, authSecret, 16, salt, 16, recvPubKey, 65, rs,
+      badPadLen, plaintext, plaintextLen, payload, &payloadLen);
+    ece_assert(err == ECE_ERROR_ENCRYPT_PADDING,
+               "Want error encrypting with rs = %d, padLen = %zu", rs,
+               badPadLen);
+
+    free(plaintext);
     free(payload);
   }
 }
