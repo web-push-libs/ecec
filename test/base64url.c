@@ -31,7 +31,7 @@ static base64url_test_t base64url_tests[] = {
 };
 
 void
-test_base64url_decode() {
+test_base64url_decode(void) {
   size_t tests = sizeof(base64url_tests) / sizeof(base64url_test_t);
   for (size_t i = 0; i < tests; i++) {
     base64url_test_t t = base64url_tests[i];

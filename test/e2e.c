@@ -3,7 +3,7 @@
 #include <string.h>
 
 void
-test_webpush_aes128gcm_e2e() {
+test_webpush_aes128gcm_e2e(void) {
   uint8_t rawRecvPrivKey[ECE_WEBPUSH_PRIVATE_KEY_LENGTH];
   uint8_t rawRecvPubKey[ECE_WEBPUSH_PUBLIC_KEY_LENGTH];
   uint8_t authSecret[ECE_WEBPUSH_AUTH_SECRET_LENGTH];

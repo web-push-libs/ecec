@@ -94,7 +94,7 @@ static webpush_aesgcm_encrypt_ok_test_t webpush_aesgcm_encrypt_ok_tests[] = {
 };
 
 void
-test_webpush_aesgcm_encrypt_ok() {
+test_webpush_aesgcm_encrypt_ok(void) {
   size_t tests = sizeof(webpush_aesgcm_encrypt_ok_tests) /
                  sizeof(webpush_aesgcm_encrypt_ok_test_t);
   for (size_t i = 0; i < tests; i++) {

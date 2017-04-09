@@ -102,8 +102,8 @@ ece_import_public_key(const uint8_t* rawKey, size_t rawKeyLen) {
 
 // HKDF from RFC 5869: `HKDF-Expand(HKDF-Extract(salt, ikm), info, length)`.
 static int
-ece_hkdf_sha256(const uint8_t* salt, size_t saltLen, const uint8_t* ikm,
-                size_t ikmLen, const uint8_t* info, size_t infoLen,
+ece_hkdf_sha256(const void* salt, size_t saltLen, const void* ikm,
+                size_t ikmLen, const void* info, size_t infoLen,
                 uint8_t* output, size_t outputLen) {
   int err = ECE_OK;
 
@@ -210,18 +210,13 @@ int
 ece_aes128gcm_derive_key_and_nonce(const uint8_t* salt, size_t saltLen,
                                    const uint8_t* ikm, size_t ikmLen,
                                    uint8_t* key, uint8_t* nonce) {
-  uint8_t keyInfo[ECE_AES128GCM_KEY_INFO_LENGTH];
-  memcpy(keyInfo, ECE_AES128GCM_KEY_INFO, ECE_AES128GCM_KEY_INFO_LENGTH);
   int err =
-    ece_hkdf_sha256(salt, saltLen, ikm, ikmLen, keyInfo,
+    ece_hkdf_sha256(salt, saltLen, ikm, ikmLen, ECE_AES128GCM_KEY_INFO,
                     ECE_AES128GCM_KEY_INFO_LENGTH, key, ECE_AES_KEY_LENGTH);
   if (err) {
     return err;
   }
-
-  uint8_t nonceInfo[ECE_AES128GCM_NONCE_INFO_LENGTH];
-  memcpy(nonceInfo, ECE_AES128GCM_NONCE_INFO, ECE_AES128GCM_NONCE_INFO_LENGTH);
-  return ece_hkdf_sha256(salt, saltLen, ikm, ikmLen, nonceInfo,
+  return ece_hkdf_sha256(salt, saltLen, ikm, ikmLen, ECE_AES128GCM_NONCE_INFO,
                          ECE_AES128GCM_NONCE_INFO_LENGTH, nonce,
                          ECE_NONCE_LENGTH);
 }
@@ -296,7 +291,7 @@ ece_webpush_aesgcm_generate_info(EC_KEY* recvKey, EC_KEY* senderKey,
                                  uint8_t* info) {
   size_t offset = 0;
 
-  // Copy the prefix to the buffer.
+  // Copy the prefix.
   memcpy(info, prefix, prefixLen);
   offset += prefixLen;
 
@@ -351,12 +346,10 @@ ece_webpush_aesgcm_derive_key_and_nonce(ece_mode_t mode, EC_KEY* localKey,
   // The old "aesgcm" scheme uses a static info string to derive the Web Push
   // IKM.
   uint8_t ikm[ECE_WEBPUSH_IKM_LENGTH];
-  uint8_t ikmInfo[ECE_WEBPUSH_AESGCM_IKM_INFO_LENGTH];
-  memcpy(ikmInfo, ECE_WEBPUSH_AESGCM_IKM_INFO,
-         ECE_WEBPUSH_AESGCM_IKM_INFO_LENGTH);
-  err = ece_hkdf_sha256(
-    authSecret, authSecretLen, sharedSecret, sharedSecretLen, ikmInfo,
-    ECE_WEBPUSH_AESGCM_IKM_INFO_LENGTH, ikm, ECE_WEBPUSH_IKM_LENGTH);
+  err = ece_hkdf_sha256(authSecret, authSecretLen, sharedSecret,
+                        sharedSecretLen, ECE_WEBPUSH_AESGCM_IKM_INFO,
+                        ECE_WEBPUSH_AESGCM_IKM_INFO_LENGTH, ikm,
+                        ECE_WEBPUSH_IKM_LENGTH);
   if (err) {
     goto end;
   }

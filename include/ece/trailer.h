@@ -18,7 +18,7 @@ ece_aesgcm_needs_trailer(uint32_t rs, size_t ciphertextLen);
 // Provided for completeness, but always returns false because "aes128gcm" uses
 // a padding scheme that doesn't need a trailer.
 bool
-ece_aes128gcm_needs_trailer();
+ece_aes128gcm_needs_trailer(uint32_t rs, size_t ciphertextLen);
 
 #ifdef __cplusplus
 }

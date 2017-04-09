@@ -135,7 +135,7 @@ static aes128gcm_err_decrypt_test_t aes128gcm_err_decrypt_tests[] = {
 };
 
 void
-test_webpush_aes128gcm_decrypt_ok() {
+test_webpush_aes128gcm_decrypt_ok(void) {
   size_t tests = sizeof(webpush_aes128gcm_decrypt_ok_tests) /
                  sizeof(webpush_aes128gcm_decrypt_ok_test_t);
   for (size_t i = 0; i < tests; i++) {
@@ -166,7 +166,7 @@ test_webpush_aes128gcm_decrypt_ok() {
 }
 
 void
-test_aes128gcm_decrypt_err() {
+test_aes128gcm_decrypt_err(void) {
   size_t tests =
     sizeof(aes128gcm_err_decrypt_tests) / sizeof(aes128gcm_err_decrypt_test_t);
   for (size_t i = 0; i < tests; i++) {

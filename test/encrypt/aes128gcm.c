@@ -271,7 +271,7 @@ static webpush_aes128gcm_encrypt_ok_test_t
 };
 
 void
-test_webpush_aes128gcm_encrypt_ok() {
+test_webpush_aes128gcm_encrypt_ok(void) {
   size_t tests = sizeof(webpush_aes128gcm_encrypt_ok_tests) /
                  sizeof(webpush_aes128gcm_encrypt_ok_test_t);
   for (size_t i = 0; i < tests; i++) {

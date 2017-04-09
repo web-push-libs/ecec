@@ -152,7 +152,7 @@ static webpush_aesgcm_decrypt_err_test_t webpush_aesgcm_decrypt_err_tests[] = {{
 }};
 
 void
-test_webpush_aesgcm_decrypt_ok() {
+test_webpush_aesgcm_decrypt_ok(void) {
   size_t length = sizeof(webpush_aesgcm_decrypt_ok_tests) /
                   sizeof(webpush_aesgcm_decrypt_ok_test_t);
   for (size_t i = 0; i < length; i++) {
@@ -190,7 +190,7 @@ test_webpush_aesgcm_decrypt_ok() {
 }
 
 void
-test_webpush_aesgcm_decrypt_err() {
+test_webpush_aesgcm_decrypt_err(void) {
   size_t tests = sizeof(webpush_aesgcm_decrypt_err_tests) /
                  sizeof(webpush_aesgcm_decrypt_err_test_t);
   for (size_t i = 0; i < tests; i++) {

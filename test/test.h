@@ -19,31 +19,31 @@ ece_log(const char* funcName, int line, const char* expr, const char* format,
         ...);
 
 void
-test_webpush_aesgcm_params_ok();
+test_webpush_aesgcm_params_ok(void);
 
 void
-test_webpush_aesgcm_params_err();
+test_webpush_aesgcm_params_err(void);
 
 void
-test_webpush_aesgcm_encrypt_ok();
+test_webpush_aesgcm_encrypt_ok(void);
 
 void
-test_webpush_aesgcm_decrypt_ok();
+test_webpush_aesgcm_decrypt_ok(void);
 
 void
-test_webpush_aesgcm_decrypt_err();
+test_webpush_aesgcm_decrypt_err(void);
 
 void
-test_webpush_aes128gcm_encrypt_ok();
+test_webpush_aes128gcm_encrypt_ok(void);
 
 void
-test_webpush_aes128gcm_decrypt_ok();
+test_webpush_aes128gcm_decrypt_ok(void);
 
 void
-test_aes128gcm_decrypt_err();
+test_aes128gcm_decrypt_err(void);
 
 void
-test_webpush_aes128gcm_e2e();
+test_webpush_aes128gcm_e2e(void);
 
 void
-test_base64url_decode();
+test_base64url_decode(void);

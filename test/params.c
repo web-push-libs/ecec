@@ -218,7 +218,7 @@ static webpush_aesgcm_params_err_test_t webpush_aesgcm_params_err_tests[] = {
 };
 
 void
-test_webpush_aesgcm_params_ok() {
+test_webpush_aesgcm_params_ok(void) {
   size_t length = sizeof(webpush_aesgcm_params_ok_tests) /
                   sizeof(webpush_aesgcm_params_ok_test_t);
   for (size_t i = 0; i < length; i++) {
@@ -240,7 +240,7 @@ test_webpush_aesgcm_params_ok() {
 }
 
 void
-test_webpush_aesgcm_params_err() {
+test_webpush_aesgcm_params_err(void) {
   size_t length = sizeof(webpush_aesgcm_params_err_tests) /
                   sizeof(webpush_aesgcm_params_err_test_t);
   for (size_t i = 0; i < length; i++) {
