@@ -12,7 +12,7 @@ test_webpush_aes128gcm_e2e(void) {
     ECE_WEBPUSH_PUBLIC_KEY_LENGTH, authSecret, ECE_WEBPUSH_AUTH_SECRET_LENGTH);
   ece_assert(!err, "Got %d generating keys", err);
 
-  const char* input = "When I grow up, I want to be a watermelon";
+  const void* input = "When I grow up, I want to be a watermelon";
   size_t inputLen = strlen(input);
 
   size_t payloadLen = ece_aes128gcm_payload_max_length(4096, 0, inputLen);
@@ -22,8 +22,7 @@ test_webpush_aes128gcm_e2e(void) {
 
   err = ece_aes128gcm_encrypt(rawRecvPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH,
                               authSecret, ECE_WEBPUSH_AUTH_SECRET_LENGTH, 4096,
-                              0, (const uint8_t*) input, inputLen, payload,
-                              &payloadLen);
+                              0, input, inputLen, payload, &payloadLen);
   ece_assert(!err, "Got %d encrypting plaintext", err);
   ece_assert(payloadLen == 144, "Got %zu for payload length; want 144",
              payloadLen);
@@ -41,8 +40,7 @@ test_webpush_aes128gcm_e2e(void) {
   ece_assert(plaintextLen == inputLen, "Got %zu for plaintext length; want %zu",
              plaintextLen, inputLen);
   ece_assert(!memcmp(plaintext, input, inputLen),
-             "Got `%s` for plaintext; want `%s`", (const char*) plaintext,
-             input);
+             "Got `%s` for plaintext; want `%s`", plaintext, input);
 
   free(payload);
   free(plaintext);

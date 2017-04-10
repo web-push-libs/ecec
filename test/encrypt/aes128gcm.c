@@ -13,10 +13,10 @@ typedef struct webpush_aes128gcm_encrypt_ok_test_s {
   const char* salt;
   const char* plaintext;
   size_t plaintextLen;
+  size_t padLen;
   size_t maxPayloadLen;
   size_t payloadLen;
   uint32_t rs;
-  uint8_t pad;
 } webpush_aes128gcm_encrypt_ok_test_t;
 
 static webpush_aes128gcm_encrypt_ok_test_t
@@ -49,10 +49,10 @@ static webpush_aes128gcm_encrypt_ok_test_t
         "\x0c\x6b\xfa\xad\xad\x67\x95\x88\x03\x09\x2d\x45\x46\x76\xf3\x97",
       .plaintext = "When I grow up, I want to be a watermelon",
       .plaintextLen = 41,
+      .padLen = 0,
       .maxPayloadLen = 334,
       .payloadLen = 144,
       .rs = 4096,
-      .pad = 0,
     },
     {
       .desc = "rs = 24, pad = 6",
@@ -122,10 +122,10 @@ static webpush_aes128gcm_encrypt_ok_test_t
       .plaintext = "I am the very model of a modern Major-General, I've "
                    "information vegetable, animal, and mineral",
       .plaintextLen = 94,
+      .padLen = 6,
       .maxPayloadLen = 631,
       .payloadLen = 441,
       .rs = 24,
-      .pad = 6,
     },
     {
       // This test is also interesting because the data length (54) is a
@@ -265,10 +265,10 @@ static webpush_aes128gcm_encrypt_ok_test_t
         "\xe4\x98\x88\xd2\xb2\x8f\x27\x7f\x84\x7b\xc5\xde\x96\xf0\xf8\x1b",
       .plaintext = "Push the button, Frank!",
       .plaintextLen = 23,
+      .padLen = 31,
       .maxPayloadLen = 1265,
       .payloadLen = 1058,
       .rs = 18,
-      .pad = 31,
     },
 };
 
@@ -280,8 +280,14 @@ test_webpush_aes128gcm_encrypt_ok(void) {
     webpush_aes128gcm_encrypt_ok_test_t t =
       webpush_aes128gcm_encrypt_ok_tests[i];
 
+    const void* senderPrivKey = t.senderPrivKey;
+    const void* authSecret = t.authSecret;
+    const void* salt = t.salt;
+    const void* recvPubKey = t.recvPubKey;
+    const void* plaintext = t.plaintext;
+
     size_t payloadLen =
-      ece_aes128gcm_payload_max_length(t.rs, t.pad, t.plaintextLen);
+      ece_aes128gcm_payload_max_length(t.rs, t.padLen, t.plaintextLen);
     ece_assert(payloadLen == t.maxPayloadLen,
                "Got payload max length %zu for `%s`; want %zu", payloadLen,
                t.desc, t.maxPayloadLen);
@@ -289,10 +295,10 @@ test_webpush_aes128gcm_encrypt_ok(void) {
     uint8_t* payload = calloc(payloadLen, sizeof(uint8_t));
 
     int err = ece_aes128gcm_encrypt_with_keys(
-      (const uint8_t*) t.senderPrivKey, 32, (const uint8_t*) t.authSecret, 16,
-      (const uint8_t*) t.salt, 16, (const uint8_t*) t.recvPubKey, 65, t.rs,
-      t.pad, (const uint8_t*) t.plaintext, t.plaintextLen, payload,
-      &payloadLen);
+      senderPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, authSecret,
+      ECE_WEBPUSH_AUTH_SECRET_LENGTH, salt, ECE_SALT_LENGTH, recvPubKey,
+      ECE_WEBPUSH_PUBLIC_KEY_LENGTH, t.rs, t.padLen, plaintext, t.plaintextLen,
+      payload, &payloadLen);
     ece_assert(!err, "Got %d encrypting payload for `%s`", err, t.desc);
 
     ece_assert(payloadLen == t.payloadLen,
@@ -339,8 +345,10 @@ test_webpush_aes128gcm_encrypt_pad(void) {
     uint8_t* payload = calloc(payloadLen, sizeof(uint8_t));
 
     int err = ece_aes128gcm_encrypt_with_keys(
-      senderPrivKey, 32, authSecret, 16, salt, 16, recvPubKey, 65, rs,
-      maxPadLen, plaintext, plaintextLen, payload, &payloadLen);
+      senderPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, authSecret,
+      ECE_WEBPUSH_AUTH_SECRET_LENGTH, salt, ECE_SALT_LENGTH, recvPubKey,
+      ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs, maxPadLen, plaintext, plaintextLen,
+      payload, &payloadLen);
     ece_assert(!err, "Got %d encrypting with rs = %d, padLen = %zu", err, rs,
                maxPadLen);
 
@@ -350,8 +358,10 @@ test_webpush_aes128gcm_encrypt_pad(void) {
     payload = realloc(payload, payloadLen);
 
     err = ece_aes128gcm_encrypt_with_keys(
-      senderPrivKey, 32, authSecret, 16, salt, 16, recvPubKey, 65, rs,
-      badPadLen, plaintext, plaintextLen, payload, &payloadLen);
+      senderPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, authSecret,
+      ECE_WEBPUSH_AUTH_SECRET_LENGTH, salt, ECE_SALT_LENGTH, recvPubKey,
+      ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs, badPadLen, plaintext, plaintextLen,
+      payload, &payloadLen);
     ece_assert(err == ECE_ERROR_ENCRYPT_PADDING,
                "Want error encrypting with rs = %d, padLen = %zu", rs,
                badPadLen);

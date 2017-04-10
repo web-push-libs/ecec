@@ -142,8 +142,12 @@ test_webpush_aes128gcm_decrypt_ok(void) {
     webpush_aes128gcm_decrypt_ok_test_t t =
       webpush_aes128gcm_decrypt_ok_tests[i];
 
-    size_t plaintextLen = ece_aes128gcm_plaintext_max_length(
-      (const uint8_t*) t.payload, t.payloadLen);
+    const void* recvPrivKey = t.recvPrivKey;
+    const void* authSecret = t.authSecret;
+    const void* payload = t.payload;
+
+    size_t plaintextLen =
+      ece_aes128gcm_plaintext_max_length(payload, t.payloadLen);
     ece_assert(plaintextLen == t.maxPlaintextLen,
                "Got plaintext max length %zu for `%s`; want %zu", plaintextLen,
                t.desc, t.maxPlaintextLen);
@@ -151,8 +155,9 @@ test_webpush_aes128gcm_decrypt_ok(void) {
     uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
 
     int err = ece_webpush_aes128gcm_decrypt(
-      (const uint8_t*) t.recvPrivKey, 32, (const uint8_t*) t.authSecret, 16,
-      (const uint8_t*) t.payload, t.payloadLen, plaintext, &plaintextLen);
+      recvPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, authSecret,
+      ECE_WEBPUSH_AUTH_SECRET_LENGTH, payload, t.payloadLen, plaintext,
+      &plaintextLen);
     ece_assert(!err, "Got %d decrypting payload for `%s`", err, t.desc);
 
     ece_assert(plaintextLen == t.plaintextLen,
@@ -172,17 +177,19 @@ test_aes128gcm_decrypt_err(void) {
   for (size_t i = 0; i < tests; i++) {
     aes128gcm_err_decrypt_test_t t = aes128gcm_err_decrypt_tests[i];
 
-    size_t plaintextLen = ece_aes128gcm_plaintext_max_length(
-      (const uint8_t*) t.payload, t.payloadLen);
+    const void* ikm = t.ikm;
+    const void* payload = t.payload;
+
+    size_t plaintextLen =
+      ece_aes128gcm_plaintext_max_length(payload, t.payloadLen);
     ece_assert(plaintextLen == t.maxPlaintextLen,
                "Got plaintext max length %zu for `%s`; want %zu", plaintextLen,
                t.desc, t.maxPlaintextLen);
 
     uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
 
-    int err = ece_aes128gcm_decrypt((const uint8_t*) t.ikm, 16,
-                                    (const uint8_t*) t.payload, t.payloadLen,
-                                    plaintext, &plaintextLen);
+    int err = ece_aes128gcm_decrypt(ikm, 16, payload, t.payloadLen, plaintext,
+                                    &plaintextLen);
     ece_assert(err == t.err, "Got %d decrypting payload for `%s`; want %d", err,
                t.desc, t.err);
 

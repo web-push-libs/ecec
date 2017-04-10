@@ -158,6 +158,10 @@ test_webpush_aesgcm_decrypt_ok(void) {
   for (size_t i = 0; i < length; i++) {
     webpush_aesgcm_decrypt_ok_test_t t = webpush_aesgcm_decrypt_ok_tests[i];
 
+    const void* recvPrivKey = t.recvPrivKey;
+    const void* authSecret = t.authSecret;
+    const void* ciphertext = t.ciphertext;
+
     uint8_t salt[ECE_SALT_LENGTH];
     uint8_t rawSenderPubKey[ECE_WEBPUSH_PUBLIC_KEY_LENGTH];
     uint32_t rs;
@@ -174,9 +178,10 @@ test_webpush_aesgcm_decrypt_ok(void) {
     uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
 
     err = ece_webpush_aesgcm_decrypt(
-      (const uint8_t*) t.recvPrivKey, 32, (const uint8_t*) t.authSecret, 16,
-      salt, ECE_SALT_LENGTH, rawSenderPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs,
-      (const uint8_t*) t.ciphertext, t.ciphertextLen, plaintext, &plaintextLen);
+      recvPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, authSecret,
+      ECE_WEBPUSH_AUTH_SECRET_LENGTH, salt, ECE_SALT_LENGTH, rawSenderPubKey,
+      ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs, ciphertext, t.ciphertextLen, plaintext,
+      &plaintextLen);
     ece_assert(!err, "Got %d decrypting ciphertext for `%s`", err, t.desc);
 
     ece_assert(plaintextLen == t.plaintextLen,
@@ -196,6 +201,10 @@ test_webpush_aesgcm_decrypt_err(void) {
   for (size_t i = 0; i < tests; i++) {
     webpush_aesgcm_decrypt_err_test_t t = webpush_aesgcm_decrypt_err_tests[i];
 
+    const void* recvPrivKey = t.recvPrivKey;
+    const void* authSecret = t.authSecret;
+    const void* ciphertext = t.ciphertext;
+
     uint8_t salt[ECE_SALT_LENGTH];
     uint8_t rawSenderPubKey[ECE_WEBPUSH_PUBLIC_KEY_LENGTH];
     uint32_t rs;
@@ -212,9 +221,10 @@ test_webpush_aesgcm_decrypt_err(void) {
     uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
 
     err = ece_webpush_aesgcm_decrypt(
-      (const uint8_t*) t.recvPrivKey, 32, (const uint8_t*) t.authSecret, 16,
-      salt, ECE_SALT_LENGTH, rawSenderPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs,
-      (const uint8_t*) t.ciphertext, t.ciphertextLen, plaintext, &plaintextLen);
+      recvPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, authSecret,
+      ECE_WEBPUSH_AUTH_SECRET_LENGTH, salt, ECE_SALT_LENGTH, rawSenderPubKey,
+      ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs, ciphertext, t.ciphertextLen, plaintext,
+      &plaintextLen);
     ece_assert(err == t.err, "Got %d decrypting ciphertext for `%s`; want %d",
                err, t.desc, t.err);
 

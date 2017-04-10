@@ -143,8 +143,10 @@ test_webpush_aesgcm_encrypt_ok(void) {
     uint8_t* ciphertext = calloc(ciphertextLen, sizeof(uint8_t));
 
     int err = ece_webpush_aesgcm_encrypt_with_keys(
-      senderPrivKey, 32, authSecret, 16, salt, 16, recvPubKey, 65, t.rs,
-      t.padLen, plaintext, t.plaintextLen, ciphertext, &ciphertextLen);
+      senderPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, authSecret,
+      ECE_WEBPUSH_AUTH_SECRET_LENGTH, salt, ECE_SALT_LENGTH, recvPubKey,
+      ECE_WEBPUSH_PUBLIC_KEY_LENGTH, t.rs, t.padLen, plaintext, t.plaintextLen,
+      ciphertext, &ciphertextLen);
     ece_assert(!err, "Got %d encrypting ciphertext for `%s`", err, t.desc);
 
     ece_assert(ciphertextLen == t.ciphertextLen,
@@ -189,8 +191,10 @@ test_webpush_aesgcm_encrypt_pad(void) {
     uint8_t* ciphertext = calloc(ciphertextLen, sizeof(uint8_t));
 
     int err = ece_webpush_aesgcm_encrypt_with_keys(
-      senderPrivKey, 32, authSecret, 16, salt, 16, recvPubKey, 65, rs,
-      maxPadLen, plaintext, plaintextLen, ciphertext, &ciphertextLen);
+      senderPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, authSecret,
+      ECE_WEBPUSH_AUTH_SECRET_LENGTH, salt, ECE_SALT_LENGTH, recvPubKey,
+      ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs, maxPadLen, plaintext, plaintextLen,
+      ciphertext, &ciphertextLen);
     ece_assert(!err, "Got %d encrypting with rs = %d, padLen = %zu", err, rs,
                maxPadLen);
 
@@ -201,8 +205,10 @@ test_webpush_aesgcm_encrypt_pad(void) {
     ciphertext = realloc(ciphertext, ciphertextLen);
 
     err = ece_webpush_aesgcm_encrypt_with_keys(
-      senderPrivKey, 32, authSecret, 16, salt, 16, recvPubKey, 65, rs,
-      badPadLen, plaintext, plaintextLen, ciphertext, &ciphertextLen);
+      senderPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, authSecret,
+      ECE_WEBPUSH_AUTH_SECRET_LENGTH, salt, ECE_SALT_LENGTH, recvPubKey,
+      ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs, badPadLen, plaintext, plaintextLen,
+      ciphertext, &ciphertextLen);
     ece_assert(err == ECE_ERROR_ENCRYPT_PADDING,
                "Want error encrypting with rs = %d, padLen = %zu", rs,
                badPadLen);
