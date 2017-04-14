@@ -60,7 +60,7 @@ ece_aesgcm_min_block_pad_length(size_t padLen, size_t maxBlockLen) {
 // account for the "aes128gcm" header length.
 static inline size_t
 ece_ciphertext_max_length(uint32_t rs, size_t padSize, size_t padLen,
-                          size_t plaintextLen) {
+                          size_t plaintextLen, needs_trailer_t needsTrailer) {
   // The per-record overhead for the padding delimiter and authentication tag.
   // 17 for "aes128gcm", 18 for "aesgcm".
   assert(padSize <= 2);
@@ -82,7 +82,13 @@ ece_ciphertext_max_length(uint32_t rs, size_t padSize, size_t padLen,
 
   // The total number of encrypted records.
   assert(maxBlockLen >= 1);
-  size_t numRecords = (dataLen / maxBlockLen) + 1;
+  size_t numRecords = dataLen / maxBlockLen;
+  if (plaintextLen % rs || needsTrailer(rs, plaintextLen)) {
+    // If the plaintext length doesn't fall on a record boundary, or if
+    // we need to write an empty trailing record, allocate space to hold
+    // an extra padding delimiter and authentication tag.
+    numRecords++;
+  }
   if (numRecords > (SIZE_MAX - dataLen) / overhead) {
     return 0;
   }
@@ -190,7 +196,7 @@ ece_webpush_encrypt_plaintext(
 
   // Make sure the ciphertext buffer is large enough to hold the ciphertext.
   size_t maxCiphertextLen =
-    ece_ciphertext_max_length(rs, padSize, padLen, plaintextLen);
+    ece_ciphertext_max_length(rs, padSize, padLen, plaintextLen, needsTrailer);
   if (!maxCiphertextLen) {
     err = ECE_ERROR_INVALID_RS;
     goto end;
@@ -387,7 +393,8 @@ size_t
 ece_aes128gcm_payload_max_length(uint32_t rs, size_t padLen,
                                  size_t plaintextLen) {
   size_t ciphertextLen =
-    ece_ciphertext_max_length(rs, ECE_AES128GCM_PAD_SIZE, padLen, plaintextLen);
+    ece_ciphertext_max_length(rs, ECE_AES128GCM_PAD_SIZE, padLen, plaintextLen,
+                              &ece_aes128gcm_needs_trailer);
   if (!ciphertextLen) {
     return 0;
   }
@@ -490,7 +497,7 @@ ece_aesgcm_ciphertext_max_length(uint32_t rs, size_t padLen,
   }
   rs += ECE_TAG_LENGTH;
   return ece_ciphertext_max_length(rs, ECE_AESGCM_PAD_SIZE, padLen,
-                                   plaintextLen);
+                                   plaintextLen, &ece_aesgcm_needs_trailer);
 }
 
 int
