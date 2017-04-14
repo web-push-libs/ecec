@@ -146,6 +146,10 @@ ece_decrypt_records(const uint8_t* key, const uint8_t* nonce, uint32_t rs,
     // the padding delimiter and padding.
     bool lastRecord = ciphertextEnd >= ciphertextLen;
     size_t blockLen = recordLen - ECE_TAG_LENGTH;
+    if (blockLen < padSize) {
+      err = ECE_ERROR_DECRYPT_PADDING;
+      goto end;
+    }
     err = unpad(&plaintext[plaintextStart], lastRecord, &blockLen);
     if (err) {
       goto end;
@@ -231,21 +235,23 @@ end:
 static int
 ece_aesgcm_unpad(uint8_t* block, bool lastRecord, size_t* blockLen) {
   ECE_UNUSED(lastRecord);
-  if (*blockLen < ECE_AESGCM_PAD_SIZE) {
-    return ECE_ERROR_DECRYPT_PADDING;
-  }
+
+  assert(*blockLen >= ECE_AESGCM_PAD_SIZE);
+
   uint16_t padLen = ece_read_uint16_be(block);
   if (padLen > *blockLen - ECE_AESGCM_PAD_SIZE) {
     return ECE_ERROR_DECRYPT_PADDING;
   }
-  for (size_t i = 0; i < padLen; i++) {
-    if (block[ECE_AESGCM_PAD_SIZE + i]) {
+  size_t plaintextStart = ECE_AESGCM_PAD_SIZE + padLen;
+
+  for (size_t i = ECE_AESGCM_PAD_SIZE; i < plaintextStart; i++) {
+    if (block[i]) {
       // All padding bytes must be zero.
       return ECE_ERROR_DECRYPT_PADDING;
     }
   }
-  // Move the unpadded contents to the start of the block.
-  size_t plaintextStart = ECE_AESGCM_PAD_SIZE + padLen;
+
+  // Move the unpadded plaintext to the start of the block.
   *blockLen -= plaintextStart;
   memmove(block, &block[plaintextStart], *blockLen);
   return ECE_OK;
@@ -268,6 +274,7 @@ ece_aes128gcm_unpad(uint8_t* block, bool lastRecord, size_t* blockLen) {
     }
     return ECE_OK;
   }
+
   // All zero plaintext.
   return ECE_ERROR_ZERO_PLAINTEXT;
 }
