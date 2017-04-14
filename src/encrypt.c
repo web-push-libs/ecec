@@ -9,7 +9,7 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 
-typedef size_t (*min_block_pad_length_t)(size_t padLen, size_t dataPerBlock);
+typedef size_t (*min_block_pad_length_t)(size_t padLen, size_t maxBlockLen);
 
 typedef int (*encrypt_block_t)(EVP_CIPHER_CTX* ctx,
                                const uint8_t* blockPlaintext,
@@ -37,10 +37,11 @@ ece_write_uint16_be(uint8_t* bytes, uint16_t value) {
 // Calculates the padding so that the block contains at least one plaintext
 // byte.
 static inline size_t
-ece_min_block_pad_length(size_t padLen, size_t dataPerBlock) {
-  size_t blockPadLen = dataPerBlock - 1;
+ece_min_block_pad_length(size_t padLen, size_t maxBlockLen) {
+  assert(maxBlockLen >= 1);
+  size_t blockPadLen = maxBlockLen - 1;
   if (padLen && !blockPadLen) {
-    // If `dataPerBlock` is 1, we can only include 1 byte of data, so write
+    // If `maxBlockLen` is 1, we can only include 1 byte of data, so write
     // the padding first.
     blockPadLen++;
   }
@@ -50,8 +51,8 @@ ece_min_block_pad_length(size_t padLen, size_t dataPerBlock) {
 // Calculates the padding for an "aesgcm" block. We still want one plaintext
 // byte per block, but the padding length must fit into a `uint16_t`.
 static size_t
-ece_aesgcm_min_block_pad_length(size_t padLen, size_t dataPerBlock) {
-  size_t blockPadLen = ece_min_block_pad_length(padLen, dataPerBlock);
+ece_aesgcm_min_block_pad_length(size_t padLen, size_t maxBlockLen) {
+  size_t blockPadLen = ece_min_block_pad_length(padLen, maxBlockLen);
   return blockPadLen > UINT16_MAX ? UINT16_MAX : blockPadLen;
 }
 
@@ -62,21 +63,30 @@ ece_ciphertext_max_length(uint32_t rs, size_t padSize, size_t padLen,
                           size_t plaintextLen) {
   // The per-record overhead for the padding delimiter and authentication tag.
   // 17 for "aes128gcm", 18 for "aesgcm".
+  assert(padSize <= 2);
   size_t overhead = padSize + ECE_TAG_LENGTH;
-  if (rs <= overhead || padLen > SIZE_MAX - plaintextLen) {
+  if (rs <= overhead) {
     return 0;
   }
+  if (padLen > SIZE_MAX - plaintextLen) {
+    return 0;
+  }
+
   // The total length of the data to encrypt, including the plaintext and
   // padding.
   size_t dataLen = plaintextLen + padLen;
+
   // The maximum length of data to include in each record, excluding the
   // padding delimiter and authentication tag.
-  size_t dataPerBlock = rs - overhead;
+  size_t maxBlockLen = rs - overhead;
+
   // The total number of encrypted records.
-  size_t numRecords = (dataLen / dataPerBlock) + 1;
+  assert(maxBlockLen >= 1);
+  size_t numRecords = (dataLen / maxBlockLen) + 1;
   if (numRecords > (SIZE_MAX - dataLen) / overhead) {
     return 0;
   }
+
   return dataLen + (overhead * numRecords);
 }
 
@@ -205,11 +215,13 @@ ece_webpush_encrypt_plaintext(
     goto end;
   }
 
+  assert(padSize <= 2);
   size_t overhead = padSize + ECE_TAG_LENGTH;
 
-  // The maximum amount of plaintext and padding that will fit into a block.
-  // The last block can be smaller.
-  size_t dataPerBlock = rs - overhead;
+  // The maximum amount of plaintext and padding that will fit into a full
+  // block. The last block can be smaller.
+  assert(rs > overhead);
+  size_t maxBlockLen = rs - overhead;
 
   // The offset at which to start reading the plaintext.
   size_t plaintextStart = 0;
@@ -222,44 +234,56 @@ ece_webpush_encrypt_plaintext(
 
   bool lastRecord = false;
   while (!lastRecord) {
-    size_t blockPadLen = minBlockPadLen(padLen, dataPerBlock);
+    size_t blockPadLen = minBlockPadLen(padLen, maxBlockLen);
+    assert(blockPadLen <= padLen);
     padLen -= blockPadLen;
 
     // Fill the rest of the block with plaintext.
-    size_t maxBlockPlaintextLen = dataPerBlock - blockPadLen;
+    assert(blockPadLen <= maxBlockLen);
+    size_t maxBlockPlaintextLen = maxBlockLen - blockPadLen;
     size_t plaintextEnd;
-    if (maxBlockPlaintextLen > plaintextLen - plaintextStart) {
-      // Equivalent to `plaintextStart + maxBlockPlaintextLen > plaintextLen`
+    if (maxBlockPlaintextLen >= plaintextLen - plaintextStart) {
+      // Equivalent to `plaintextStart + maxBlockPlaintextLen >= plaintextLen`
       // without overflow.
       plaintextEnd = plaintextLen;
     } else {
       plaintextEnd = plaintextStart + maxBlockPlaintextLen;
     }
+
+    // The length of the plaintext.
+    assert(plaintextEnd >= plaintextStart);
     size_t blockPlaintextLen = plaintextEnd - plaintextStart;
 
-    // The full length of the plaintext and padding.
+    // The length of the plaintext and padding. This should never overflow
+    // because `maxBlockPlaintextLen` accounts for `blockPadLen`.
+    assert(blockPlaintextLen <= maxBlockPlaintextLen);
     size_t blockLen = blockPlaintextLen + blockPadLen;
 
-    // The full length of the encrypted record, including room for the
-    // plaintext, padding, padding delimiter, and auth tag.
+    // The length of the full encrypted record, including the plaintext,
+    // padding, padding delimiter, and auth tag. This should never overflow
+    // because `maxBlockLen` accounts for `overhead`.
+    assert(blockLen <= maxBlockLen);
     size_t recordLen = blockLen + overhead;
+
     size_t ciphertextEnd;
-    if (recordLen > maxCiphertextLen - ciphertextStart) {
-      // Equivalent to `ciphertextStart + recordLen > maxCiphertextLen`
+    if (recordLen >= maxCiphertextLen - ciphertextStart) {
+      // Equivalent to `ciphertextStart + recordLen >= maxCiphertextLen`
       // without overflow.
       ciphertextEnd = maxCiphertextLen;
     } else {
       ciphertextEnd = ciphertextStart + recordLen;
     }
 
+    assert(ciphertextEnd > ciphertextStart);
+
     bool plaintextExhausted = plaintextEnd >= plaintextLen;
     if (!padLen && plaintextExhausted && !needsTrailer(rs, ciphertextEnd)) {
       // We've reached the last record when the padding and plaintext are
-      // exhausted, and we don't need to write an empty trailing block.
+      // exhausted, and we don't need to write an empty trailing record.
       lastRecord = true;
     }
 
-    if (!lastRecord && blockLen < dataPerBlock) {
+    if (!lastRecord && blockLen < maxBlockLen) {
       // We have padding left, but not enough plaintext to form a full record.
       // Writing trailing padding-only records will still leak size information,
       // so we force the caller to pick a smaller padding length.

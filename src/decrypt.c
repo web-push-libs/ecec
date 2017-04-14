@@ -13,19 +13,20 @@ typedef int (*unpad_t)(uint8_t* block, bool lastRecord, size_t* blockLen);
 // delimiter and padding.
 static inline size_t
 ece_plaintext_max_length(uint32_t rs, size_t padSize, size_t ciphertextLen) {
+  assert(padSize <= 2);
   size_t overhead = padSize + ECE_TAG_LENGTH;
   if (rs <= overhead) {
     return 0;
   }
   size_t numRecords = ciphertextLen / rs;
   if (ciphertextLen % rs) {
-    // A smaller final record is expected for "aes128gcm", and required for
-    // "aesgcm".
+    // If the ciphertext length doesn't fall on a record boundary, we have
+    // a smaller final record.
     numRecords++;
   }
   if (numRecords > ciphertextLen / ECE_TAG_LENGTH) {
-    // Each record includes a trailing auth tag at the end. If the number of
-    // records exceeds the number of tags, the ciphertext is truncated.
+    // Each record includes a trailing auth tag. If the number of records
+    // exceeds the number of tags, the ciphertext is truncated.
     return 0;
   }
   return ciphertextLen - (ECE_TAG_LENGTH * numRecords);
@@ -49,15 +50,17 @@ ece_decrypt_record(EVP_CIPHER_CTX* ctx, const uint8_t* key, const uint8_t* iv,
     return ECE_ERROR_DECRYPT;
   }
 
+  assert(recordLen > ECE_TAG_LENGTH);
+  size_t blockLen = recordLen - ECE_TAG_LENGTH;
+
   // The authentication tag is included at the end of the encrypted record.
   uint8_t tag[ECE_TAG_LENGTH];
-  memcpy(tag, &record[recordLen - ECE_TAG_LENGTH], ECE_TAG_LENGTH);
+  memcpy(tag, &record[blockLen], ECE_TAG_LENGTH);
   if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, ECE_TAG_LENGTH, tag) !=
       1) {
     return ECE_ERROR_DECRYPT;
   }
 
-  size_t blockLen = recordLen - ECE_TAG_LENGTH;
   if (blockLen > INT_MAX ||
       EVP_DecryptUpdate(ctx, block, &chunkLen, record, (int) blockLen) != 1) {
     return ECE_ERROR_DECRYPT;
@@ -118,6 +121,8 @@ ece_decrypt_records(const uint8_t* key, const uint8_t* nonce, uint32_t rs,
     } else {
       ciphertextEnd = ciphertextStart + rs;
     }
+
+    assert(ciphertextEnd > ciphertextStart);
 
     // The full length of the encrypted record.
     size_t recordLen = ciphertextEnd - ciphertextStart;
