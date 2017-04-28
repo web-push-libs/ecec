@@ -32,12 +32,15 @@ if(DEFINED ENV{COVERAGE})
   target_link_libraries(ece PUBLIC --coverage)
 endif()
 
-set(ECE_DECRYPT_SOURCES
-  tools/ece-decrypt/ece-decrypt.c)
-add_executable(ece-decrypt ${ECE_DECRYPT_SOURCES})
+add_executable(ece-decrypt tool/decrypt.c)
 set_target_properties(ece-decrypt PROPERTIES EXCLUDE_FROM_ALL 1)
-target_include_directories(ece-decrypt PRIVATE tools/ece-decrypt)
+target_include_directories(ece-decrypt PRIVATE tool)
 target_link_libraries(ece-decrypt PRIVATE ece)
+
+add_executable(ece-keygen tool/keygen.c)
+set_target_properties(ece-keygen PROPERTIES EXCLUDE_FROM_ALL 1)
+target_include_directories(ece-keygen PRIVATE tool)
+target_link_libraries(ece-keygen PRIVATE ece)
 
 set(ECE_TEST_SOURCES
   test/decrypt/aes128gcm.c
