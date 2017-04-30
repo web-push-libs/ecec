@@ -42,6 +42,11 @@ set_target_properties(ece-keygen PROPERTIES EXCLUDE_FROM_ALL 1)
 target_include_directories(ece-keygen PRIVATE tool)
 target_link_libraries(ece-keygen PRIVATE ece)
 
+add_executable(vapid tool/vapid.c)
+set_target_properties(vapid PROPERTIES EXCLUDE_FROM_ALL 1)
+target_include_directories(vapid PRIVATE tool)
+target_link_libraries(vapid PRIVATE ece)
+
 set(ECE_TEST_SOURCES
   test/decrypt/aes128gcm.c
   test/decrypt/aesgcm.c
