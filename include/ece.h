@@ -457,21 +457,21 @@ ece_webpush_aesgcm_headers_extract_params(const char* cryptoKeyHeader,
  * \param base64Len[in]     The length of the encoded string.
  * \param paddingPolicy[in] The policy for handling "=" padding in the encoded
  *                          input.
- * \param decoded[in]       An empty array to hold the decoded result. May be
- *                          `NULL` if `decodedLen` is 0.
- * \param decodedLen[in]    The size of the empty `decoded` array. On success,
- *                          `decoded[0..decodedLen]` contains the result.
+ * \param binary[in]        An empty array to hold the decoded result. May be
+ *                          `NULL` if `binaryLen` is 0.
+ * \param binaryLen[in]     The size of the empty `binary` array. On success,
+ *                          `binary[0..binaryLen]` contains the result.
  *
- * \return                  The actual decoded length. If `decoded` is `NULL`
- *                          and `decodedLen` is 0, returns the size of the array
+ * \return                  The actual decoded length. If `binaryLen` is 0,
+ *                          returns the size of the array
  *                          required to hold the result. If `base64` contains
- *                          invalid characters, or `decodedLen` is not large
+ *                          invalid characters, or `binaryLen` is not large
  *                          enough to hold the full result, returns 0.
  */
 size_t
 ece_base64url_decode(const char* base64, size_t base64Len,
                      ece_base64url_decode_policy_t paddingPolicy,
-                     uint8_t* decoded, size_t decodedLen);
+                     uint8_t* binary, size_t binaryLen);
 
 #ifdef __cplusplus
 }
