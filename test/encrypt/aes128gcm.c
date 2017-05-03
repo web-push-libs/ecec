@@ -129,8 +129,8 @@ static webpush_aes128gcm_encrypt_ok_test_t
     },
     {
       // This test is also interesting because the data length (54) is a
-      // multiple
-      // of rs (18). We'll allocate memory to hold 4 records, but only write 3.
+      // multiple of rs (18). We'll allocate memory to hold 4 records, but only
+      // write 3.
       .desc = "rs = 18, pad = 31",
       .payload = "\xe4\x98\x88\xd2\xb2\x8f\x27\x7f\x84\x7b\xc5\xde\x96\xf0\xf8"
                  "\x1b\x00\x00"

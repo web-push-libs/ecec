@@ -16,7 +16,7 @@ typedef struct webpush_aes128gcm_decrypt_ok_test_s {
 static webpush_aes128gcm_decrypt_ok_test_t
   webpush_aes128gcm_decrypt_ok_tests[] = {
     {
-      .desc = "rs = 24",
+      .desc = "rs = 24, pad = 0",
       .plaintext = "I am the walrus",
       .recvPrivKey = "\xc8\x99\xd1\x1d\x32\xe2\xb7\xe6\xfe\x74\x98\x78\x6f\x50"
                      "\xf2\x3b\x98\xac\xe5\x39\x7a\xd2\x61\xde\x39\xba\x64\x49"
@@ -45,6 +45,33 @@ static webpush_aes128gcm_decrypt_ok_test_t
       .plaintextLen = 15,
     },
     {
+      .desc = "rs = 49, pad = 84; ciphertext length falls on record boundary",
+      .plaintext = "Hello, world",
+      .recvPrivKey = "\x67\x00\x4a\x4e\xa8\x20\xde\xed\x8e\x49\xdb\x5e\x94\x80"
+                     "\xe6\x3d\x3e\xa3\xcc\xe1\xae\x8e\x1a\x60\x60\x97\x13\xd5"
+                     "\x27\xd0\x01\xef",
+      .authSecret =
+        "\x95\xf1\x75\x70\xe5\x08\xef\x6a\x2b\x2a\xd1\xb4\xf5\xca\xde\x33",
+      .payload =
+        "\xfb\x28\x83\xce\xc1\xc4\xfc\xad\xd6\xd1\x37\x1f\x6e\xa4\x91\xe0\x00"
+        "\x00\x00\x31\x41\x04\x2d\x44\x1e\xe7\xf9\xff\x6a\x03\x29\xa6\x49\x27"
+        "\xd0\x52\x4f\xdb\xe7\xb2\x2c\x6f\xb6\x5e\x10\xab\x4f\xdc\x03\x8f\x94"
+        "\x42\x0a\x0c\xa3\xfa\x28\xda\xd3\x6c\x84\xec\x91\xa1\x62\xea\xe0\x78"
+        "\xfa\xad\x2c\x1c\xed\x78\xde\x81\x13\xe1\x96\x02\xb2\x0e\x89\x4f\x49"
+        "\x76\xb9\x73\xe2\xfc\xf6\x82\xfa\x0c\x8c\xcd\x9a\xf3\xd5\xbf\xf1\xed"
+        "\xe1\x6f\xad\x5a\x31\xce\x19\xd3\x8b\x5e\x1f\xe1\xf7\x8a\x4f\xad\x84"
+        "\x2b\xbc\x10\x25\x4c\x2c\x6c\xdd\x96\xa2\xb5\x52\x84\xd9\x72\xc5\x3c"
+        "\xad\x8c\x3b\xac\xb1\x0f\x5f\x57\xeb\x0d\x4a\x43\x33\xb6\x04\x10\x2b"
+        "\xa1\x17\xca\xe2\x91\x08\xfb\xd9\xf6\x29\xa8\xba\x69\x60\xdd\x01\x94"
+        "\x5b\x39\xed\x37\xba\x70\x6c\x43\x4a\x10\xfd\x2b\xd2\x09\x4f\xf9\x24"
+        "\x9b\xcd\xad\x45\x13\x5f\x5f\xe4\x5f\xcd\x38\x07\x1f\x8b\x2d\x39\x41"
+        "\xaf\xda\x43\x98\x10\xd7\x7a\xac\xaf\x7c\xe5\x0b\x54\x32\x5b\xf5\x8c"
+        "\x95\x03\x33\x7d\x07\x37\x85\xa3\x23\xdf\xa3\x43",
+      .payloadLen = 233,
+      .maxPlaintextLen = 99,
+      .plaintextLen = 12,
+    },
+    {
       .desc = "Example from draft-ietf-webpush-encryption-latest",
       .plaintext = "When I grow up, I want to be a watermelon",
       .recvPrivKey = "\xab\x57\x57\xa7\x0d\xd4\xa5\x3e\x55\x3a\x6b\xbf\x71\xff"
@@ -66,6 +93,110 @@ static webpush_aes128gcm_decrypt_ok_test_t
       .maxPlaintextLen = 42,
       .plaintextLen = 41,
     },
+    {
+      .desc = "rs = 18, pad = 0",
+      .plaintext = "1",
+      .recvPrivKey = "\x27\x43\x3f\xab\x89\x70\xb3\xcb\x52\x84\xb6\x11\x83\xef"
+                     "\xb4\x62\x86\x56\x2c\xd2\xa7\x33\x0d\x8c\xae\x96\x09\x11"
+                     "\xa5\x57\x1d\x0c",
+      .authSecret =
+        "\xd6\x5a\x04\xdf\x95\xf2\xdb\x5e\x60\x48\x39\xf7\x17\xdc\xde\x79",
+      .payload = "\x7c\xae\xbd\xbc\x20\x93\x8e\xe3\x40\xa9\x46\xf1\xbd\x4f\x68"
+                 "\xf1\x00\x00\x00\x12\x41\x04\x37\xcf\xdb\x52\x23\xd9\xf9\x5e"
+                 "\xaa\x02\xf6\xed\x94\x0f\xf2\x2e\xaf\x05\xb3\x62\x2e\x94\x9d"
+                 "\xc3\xce\x9f\x33\x5e\x6e\xf9\xb2\x6a\xea\xac\xca\x0f\x74\x08"
+                 "\x0a\x8b\x36\x45\x92\xf2\xcc\xc6\xd5\xed\xdd\x43\x00\x4b\x70"
+                 "\xb9\x18\x87\xd1\x44\xd9\xfa\x93\xf1\x6c\x3b\xc7\xea\x68\xf4"
+                 "\xfd\x54\x7a\x94\xec\xa8\x4b\x16\xe1\x38\xa6\x08\x01\x77",
+      .payloadLen = 104,
+      .maxPlaintextLen = 2,
+      .plaintextLen = 1,
+    },
+};
+
+typedef struct webpush_aes128gcm_err_decrypt_test_s {
+  const char* desc;
+  const char* recvPrivKey;
+  const char* authSecret;
+  const char* payload;
+  size_t payloadLen;
+  size_t maxPlaintextLen;
+  int err;
+} webpush_aes128gcm_err_decrypt_test_t;
+
+static webpush_aes128gcm_err_decrypt_test_t
+  webpush_aes128gcm_err_decrypt_tests[] = {
+    {
+      // Header block shorter than 21 bytes.
+      .desc = "Missing header block",
+      .recvPrivKey = "\x1b\xe8\x3f\x38\x33\x2e\xf0\x96\x81\xfa\xf3\xf3\x07\xb1"
+                     "\xff\x2e\x10\xca\xb7\x8c\xc7\xcd\xab\x68\x3a\xc0\xee\x92"
+                     "\xac\x3f\x6e\xe1",
+      .authSecret =
+        "\x34\x71\xbb\x98\x48\x1e\x02\x53\x3b\xf3\x95\x42\xbc\xf3\xdb\xa4",
+      .payload = "\x45\xb7\x4d\x2b\x69\xbe\x9b\x07\x4d\xe3\xb3\x5a\xa8\x7e\x7c"
+                 "\x15\x61\x1d",
+      .payloadLen = 18,
+      .maxPlaintextLen = 0,
+      .err = ECE_ERROR_SHORT_HEADER,
+    },
+    {
+      // Sender key shorter than 65 bytes.
+      .desc = "Truncated sender key",
+      .recvPrivKey = "\xce\x88\xe8\xe0\xb3\x05\x7a\x47\x52\xeb\x4c\x8f\xa9\x31"
+                     "\xeb\x62\x1c\x30\x2d\xa5\xad\x03\xb8\x1a\xf4\x59\xcf\x67"
+                     "\x35\x56\x0c\xae",
+      .authSecret =
+        "\x5c\x31\xe0\xd9\x6d\x9a\x13\x98\x99\xac\x09\x69\xd3\x59\xf7\x40",
+      .payload = "\xde\x5b\x69\x6b\x87\xf1\xa1\x5c\xb6\xad\xeb\xdd\x79\xd6\xf9"
+                 "\x9e\x00\x00\x00\x12\x01\x00\xb6\xbc\x18\x26\xc3\x7c\x9f\x73"
+                 "\xdd\x6b\x48\x59\xc2\xb5\x05\x18\x19\x52",
+      .payloadLen = 40,
+      .maxPlaintextLen = 2,
+      .err = ECE_ERROR_COMPUTE_SECRET,
+    },
+    {
+      // The payload is encrypted with only the first 12 bytes of the auth
+      // secret.
+      .desc = "Truncated auth secret",
+      .recvPrivKey = "\x60\xc7\x63\x6a\x51\x7d\xe7\x03\x9a\x0a\xc2\xd0\xe3\x06"
+                     "\x44\x00\x79\x4c\x78\xe7\xe0\x49\x39\x81\x29\xa2\x27\xce"
+                     "\xe0\xf9\xa8\x01",
+      .authSecret =
+        "\x35\x5a\x38\xcd\x6d\x9b\xef\x15\x99\x0e\x2d\x33\x08\xdb\xd6\x00",
+      .payload = "\x81\x15\xf4\x98\x8b\x8c\x39\x2a\x7b\xac\xb4\x3c\x8f\x1a\xc5"
+                 "\x65\x00\x00\x00\x12\x41\x04\x19\x94\x48\x3c\x54\x1e\x9b\xc3"
+                 "\x9a\x6a\xf0\x3f\xf7\x13\xaa\x77\x45\xc2\x84\xe1\x38\xa4\x2a"
+                 "\x24\x35\xb7\x97\xb2\x0c\x4b\x69\x8c\xf5\x11\x8b\x4f\x85\x55"
+                 "\x31\x7c\x19\x0e\xab\xeb\xfa\xb7\x49\xc1\x64\xd3\xf6\xbd\xeb"
+                 "\xe0\xd4\x41\x71\x91\x31\xa3\x57\xd8\x89\x0a\x13\xc4\xdb\xd4"
+                 "\xb1\x6f\xf3\xdd\x5a\x83\xf7\xc9\x1a\xd6\xe0\x40\xac\x42\x73"
+                 "\x0a\x7f\x0b\x3c\xd3\x24\x5e\x9f\x8d\x6f\xf3\x1c\x75\x1d\x41"
+                 "\x0c\xfd",
+      .payloadLen = 122,
+      .maxPlaintextLen = 4,
+      .err = ECE_ERROR_DECRYPT,
+    },
+    {
+      .desc = "Early final record",
+      .recvPrivKey = "\x5d\xda\x1d\x91\x8b\xc4\x07\xba\x3c\xda\x12\xcb\x80\x14"
+                     "\xd4\x9a\xa7\xe0\x26\x90\x02\x82\x03\x04\x46\x6b\xc8\x00"
+                     "\x34\xca\x92\x40",
+      .authSecret =
+        "\x40\xc2\x41\xfd\xe4\x26\x9e\xe1\xe6\xd7\x25\x59\x2d\x98\x27\x18",
+      .payload = "\xdb\xe2\x15\x50\x7d\x1a\xd3\xd2\xea\xea\xbe\xae\x6e\x87\x4d"
+                 "\x8f\x00\x00\x00\x12\x41\x04\x7b\xc4\x34\x3f\x34\xa8\x34\x8c"
+                 "\xdc\x4e\x46\x2f\xfc\x7c\x40\xaa\x6a\x8c\x61\xa7\x39\xc4\xc4"
+                 "\x1d\x45\x12\x55\x05\xf7\x0e\x9f\xc5\xf9\xef\xa8\x68\x52\xdd"
+                 "\x48\x8d\xcf\x8e\x8e\xa2\xca\xfb\x75\xe0\x7a\xbd\x5e\xe7\xc9"
+                 "\xd5\xc0\x38\xba\xfe\xf0\x79\x57\x1b\x0b\xda\x29\x44\x11\xce"
+                 "\x98\xc7\x6d\xd0\x31\xc0\xe5\x80\x57\x7a\x49\x80\xa3\x75\xe4"
+                 "\x5e\xd3\x04\x29\xbe\x0e\x2e\xe9\xda\x7e\x6d\xf8\x69\x6d\x01"
+                 "\xb8\xec",
+      .payloadLen = 122,
+      .maxPlaintextLen = 4,
+      .err = ECE_ERROR_DECRYPT_PADDING,
+    },
 };
 
 typedef struct aes128gcm_ok_decrypt_test_s {
@@ -77,15 +208,6 @@ typedef struct aes128gcm_ok_decrypt_test_s {
   size_t maxPlaintextLen;
   size_t plaintextLen;
 } aes128gcm_ok_decrypt_test_t;
-
-typedef struct aes128gcm_err_decrypt_test_s {
-  const char* desc;
-  const char* ikm;
-  const char* payload;
-  size_t payloadLen;
-  size_t maxPlaintextLen;
-  int err;
-} aes128gcm_err_decrypt_test_t;
 
 static aes128gcm_ok_decrypt_test_t aes128gcm_ok_decrypt_tests[] = {
   {
@@ -149,6 +271,15 @@ static aes128gcm_ok_decrypt_test_t aes128gcm_ok_decrypt_tests[] = {
     .plaintextLen = 41,
   },
 };
+
+typedef struct aes128gcm_err_decrypt_test_s {
+  const char* desc;
+  const char* ikm;
+  const char* payload;
+  size_t payloadLen;
+  size_t maxPlaintextLen;
+  int err;
+} aes128gcm_err_decrypt_test_t;
 
 static aes128gcm_err_decrypt_test_t aes128gcm_err_decrypt_tests[] = {
   {
@@ -272,6 +403,37 @@ test_webpush_aes128gcm_decrypt_ok(void) {
                t.desc, t.plaintextLen);
     ece_assert(!memcmp(plaintext, t.plaintext, plaintextLen),
                "Wrong plaintext for `%s`", t.desc);
+
+    free(plaintext);
+  }
+}
+
+void
+test_webpush_aes128gcm_decrypt_err(void) {
+  size_t tests = sizeof(webpush_aes128gcm_err_decrypt_tests) /
+                 sizeof(webpush_aes128gcm_err_decrypt_test_t);
+  for (size_t i = 0; i < tests; i++) {
+    webpush_aes128gcm_err_decrypt_test_t t =
+      webpush_aes128gcm_err_decrypt_tests[i];
+
+    const void* recvPrivKey = t.recvPrivKey;
+    const void* authSecret = t.authSecret;
+    const void* payload = t.payload;
+
+    size_t plaintextLen =
+      ece_aes128gcm_plaintext_max_length(payload, t.payloadLen);
+    ece_assert(plaintextLen == t.maxPlaintextLen,
+               "Got plaintext max length %zu for `%s`; want %zu", plaintextLen,
+               t.desc, t.maxPlaintextLen);
+
+    uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
+
+    int err = ece_webpush_aes128gcm_decrypt(
+      recvPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, authSecret,
+      ECE_WEBPUSH_AUTH_SECRET_LENGTH, payload, t.payloadLen, plaintext,
+      &plaintextLen);
+    ece_assert(err == t.err, "Got %d decrypting payload for `%s`; want %d", err,
+               t.desc, t.err);
 
     free(plaintext);
   }

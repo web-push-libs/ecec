@@ -18,6 +18,7 @@ main() {
   test_webpush_aes128gcm_encrypt_ok();
   test_webpush_aes128gcm_encrypt_pad();
   test_webpush_aes128gcm_decrypt_ok();
+  test_webpush_aes128gcm_decrypt_err();
   test_aes128gcm_decrypt_ok();
   test_aes128gcm_decrypt_err();
 

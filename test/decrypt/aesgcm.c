@@ -29,7 +29,7 @@ typedef struct webpush_aesgcm_decrypt_err_test_s {
 
 static webpush_aesgcm_decrypt_ok_test_t webpush_aesgcm_decrypt_ok_tests[] = {
   {
-    .desc = "padSize = 2, rs = 24, pad = 0",
+    .desc = "rs = 24, pad = 0",
     .plaintext = "Some message",
     .recvPrivKey = "\xe2\x1d\xb7\x1b\xf2\xa4\x5c\x2f\x53\xbc\x14\x8a\xda\xfd"
                    "\x10\xec\x89\xa9\x4b\x66\x00\xb9\x17\x7c\x85\x0c\x8d\xd2"
@@ -48,7 +48,7 @@ static webpush_aesgcm_decrypt_ok_test_t webpush_aesgcm_decrypt_ok_tests[] = {
     .plaintextLen = 12,
   },
   {
-    .desc = "padSize = 2, rs = 8, pad = 16",
+    .desc = "rs = 8, pad = 16",
     .plaintext = "Yet another message",
     .recvPrivKey = "\xe2\x1d\xb7\x1b\xf2\xa4\x5c\x2f\x53\xbc\x14\x8a\xda\xfd"
                    "\x10\xec\x89\xa9\x4b\x66\x00\xb9\x17\x7c\x85\x0c\x8d\xd2"
@@ -73,7 +73,7 @@ static webpush_aesgcm_decrypt_ok_test_t webpush_aesgcm_decrypt_ok_tests[] = {
     .plaintextLen = 19,
   },
   {
-    .desc = "padSize = 2, rs = 3, pad = 0",
+    .desc = "rs = 3, pad = 0",
     .plaintext = "Small record size",
     .recvPrivKey = "\xe2\x1d\xb7\x1b\xf2\xa4\x5c\x2f\x53\xbc\x14\x8a\xda\xfd"
                    "\x10\xec\x89\xa9\x4b\x66\x00\xb9\x17\x7c\x85\x0c\x8d\xd2"

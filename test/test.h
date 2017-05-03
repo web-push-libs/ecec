@@ -52,6 +52,9 @@ void
 test_aes128gcm_decrypt_err(void);
 
 void
+test_webpush_aes128gcm_decrypt_err(void);
+
+void
 test_webpush_aes128gcm_e2e(void);
 
 void
