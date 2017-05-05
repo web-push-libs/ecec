@@ -416,9 +416,9 @@ ece_webpush_aesgcm_decrypt(const uint8_t* rawRecvPrivKey,
   }
   rs += ECE_TAG_LENGTH;
   return ece_webpush_decrypt(
-    rawRecvPrivKey, rawRecvPrivKeyLen, authSecret, authSecretLen, salt,
-    ECE_SALT_LENGTH, rawSenderPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs,
-    ECE_AESGCM_PAD_SIZE, ciphertext, ciphertextLen, &ece_aesgcm_needs_trailer,
+    rawRecvPrivKey, rawRecvPrivKeyLen, authSecret, authSecretLen, salt, saltLen,
+    rawSenderPubKey, rawSenderPubKeyLen, rs, ECE_AESGCM_PAD_SIZE, ciphertext,
+    ciphertextLen, &ece_aesgcm_needs_trailer,
     &ece_webpush_aesgcm_derive_key_and_nonce, &ece_aesgcm_unpad, plaintext,
     plaintextLen);
 }
