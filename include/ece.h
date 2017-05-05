@@ -49,6 +49,17 @@ extern "C" {
 #define ECE_UNUSED(x) (void) (x)
 
 /*!
+ * The policy for appending trailing "=" characters to Base64url-encoded output.
+ */
+typedef enum ece_base64url_encode_policy_e {
+  /*! Omits padding, even if the input is not a multiple of 4. */
+  ECE_BASE64URL_OMIT_PADDING,
+
+  /*! Includes padding if the input is not a multiple of 4. */
+  ECE_BASE64URL_INCLUDE_PADDING,
+} ece_base64url_encode_policy_t;
+
+/*!
  * The policy for handling trailing "=" characters in Base64url-encoded input.
  */
 typedef enum ece_base64url_decode_policy_e {
@@ -449,6 +460,30 @@ ece_webpush_aesgcm_headers_extract_params(const char* cryptoKeyHeader,
                                           uint8_t* rawSenderPubKey,
                                           size_t rawSenderPubKeyLen,
                                           uint32_t* rs);
+
+/*!
+ * Converts a byte array to a Base64url-encoded (RFC 4648) string.
+ *
+ * \param binary[in]        The byte array to encode.
+ * \param binaryLen[in]     The length of the byte array.
+ * \param paddingPolicy[in] The policy for padding the encoded output.
+ * \param base64[in]        An empty array to hold the encoded result. May be
+ *                          `NULL` if `base64Len` is 0.
+ * \param base64Len[in]     The size of the empty `base64` array, including
+ *                          room for the NUL terminator. On success,
+ *                          `base64[0..base64Len - 1]` contains the result,
+ *                          including a trailing NUL.
+ *
+ * \return                  The length of the encoded string, not including the
+ *                          NUL terminator. If `binaryLen` is 0, returns the
+ *                          size of the array required to hold the result. If
+ *                          `binaryLen` is not large enough to hold the full
+ *                          string, returns 0.
+ */
+size_t
+ece_base64url_encode(const uint8_t* binary, size_t binaryLen,
+                     ece_base64url_encode_policy_t paddingPolicy, char* base64,
+                     size_t base64Len);
 
 /*!
  * Decodes a Base64url-encoded (RFC 4648) string.

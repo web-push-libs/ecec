@@ -58,4 +58,7 @@ void
 test_webpush_aes128gcm_e2e(void);
 
 void
+test_base64url_encode(void);
+
+void
 test_base64url_decode(void);

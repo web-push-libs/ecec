@@ -1,10 +1,16 @@
 #include "ece.h"
 
 // This file implements a Base64url decoder per RFC 4648. Originally implemented
-// in https://bugzilla.mozilla.org/show_bug.cgi?id=1256488.
+// in https://bugzilla.mozilla.org/show_bug.cgi?id=1256488 and
+// https://bugzilla.mozilla.org/show_bug.cgi?id=1205137.
 
 #include <assert.h>
 #include <stdbool.h>
+#include <string.h>
+
+// Maps an index to a character in the Base64url alphabet.
+static const char ece_base64url_encode_table[] =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 // Maps a character in the Base64url alphabet to its index, per RFC 4648,
 // Table 2. Invalid characters map to 64.
@@ -17,6 +23,70 @@ static const uint8_t ece_base64url_decode_table[] = {
   63, 64, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42,
   43, 44, 45, 46, 47, 48, 49, 50, 51, 64, 64, 64, 64,
 };
+
+// Returns the size of the buffer required to hold the Base64url output,
+// or 0 if `binaryLen` is too large.
+static inline size_t
+ece_base64url_base64_length(size_t binaryLen) {
+  if (binaryLen / 3 > SIZE_MAX / 4) {
+    return 0;
+  }
+  size_t requiredBase64Len = (binaryLen / 3) * 4;
+
+  // The final quantum can be 2 or 3 bytes: 1 byte encodes to 2 bytes, and 2
+  // bytes encode to 3 bytes. We also include 1 byte for the NUL terminator.
+  size_t finalLen = 0;
+  switch (binaryLen % 3) {
+  case 1:
+    finalLen = 2;
+    break;
+
+  case 2:
+    finalLen = 3;
+    break;
+  }
+  if (finalLen > SIZE_MAX - requiredBase64Len) {
+    return 0;
+  }
+  return requiredBase64Len + finalLen;
+}
+
+// Encodes a `binary` quantum into `base64`. A 3-byte quantum encodes to 4
+// bytes, a 2-byte quantum encodes to 3 bytes, and a 1-byte quantum encodes to
+// 2 bytes.
+static inline size_t
+ece_base64url_encode_quantum(const uint8_t* binary, size_t binaryLen,
+                             char* base64) {
+  assert(binaryLen <= 3);
+
+  uint32_t quantum = 0;
+  for (size_t i = 0; i < binaryLen; i++) {
+    quantum <<= 8;
+    quantum |= (uint32_t) binary[i];
+  }
+
+  switch (binaryLen) {
+  case 1:
+    base64[0] = ece_base64url_encode_table[(quantum >> 2) & 0x3f];
+    base64[1] = ece_base64url_encode_table[(quantum << 4) & 0x3f];
+    return 2;
+
+  case 2:
+    base64[0] = ece_base64url_encode_table[(quantum >> 10) & 0x3f];
+    base64[1] = ece_base64url_encode_table[(quantum >> 4) & 0x3f];
+    base64[2] = ece_base64url_encode_table[(quantum << 2) & 0x3f];
+    return 3;
+
+  case 3:
+    base64[0] = ece_base64url_encode_table[(quantum >> 18) & 0x3f];
+    base64[1] = ece_base64url_encode_table[(quantum >> 12) & 0x3f];
+    base64[2] = ece_base64url_encode_table[(quantum >> 6) & 0x3f];
+    base64[3] = ece_base64url_encode_table[quantum & 0x3f];
+    return 4;
+  }
+
+  return 0;
+}
 
 // Returns the number of trailing `=` characters to remove from the end of
 // `base64`, based on the `paddingPolicy`. Valid values are 0, 1, or 2;
@@ -124,6 +194,66 @@ ece_base64url_decode_quantum(const char* base64, size_t base64Len,
   }
 
   return false;
+}
+
+size_t
+ece_base64url_encode(const uint8_t* binary, size_t binaryLen,
+                     ece_base64url_encode_policy_t paddingPolicy, char* base64,
+                     size_t base64Len) {
+  // Don't encode empty strings.
+  if (!binaryLen) {
+    return 0;
+  }
+
+  // Ensure we have enough room to hold the output.
+  size_t requiredBase64Len = ece_base64url_base64_length(binaryLen);
+  if (!requiredBase64Len) {
+    return 0;
+  }
+  size_t padLen = 0;
+  if (paddingPolicy == ECE_BASE64URL_INCLUDE_PADDING) {
+    switch (requiredBase64Len % 4) {
+    case 2:
+      padLen = 2;
+      break;
+
+    case 3:
+      padLen = 1;
+      break;
+    }
+    if (padLen > SIZE_MAX - requiredBase64Len) {
+      return 0;
+    }
+    requiredBase64Len += padLen;
+  }
+  if (requiredBase64Len > SIZE_MAX - 1) {
+    return 0;
+  }
+  requiredBase64Len++;
+
+  if (base64Len) {
+    if (base64Len < requiredBase64Len) {
+      return 0;
+    }
+    for (; binaryLen >= 3; binaryLen -= 3) {
+      base64 += ece_base64url_encode_quantum(binary, 3, base64);
+      binary += 3;
+    }
+    base64 += ece_base64url_encode_quantum(binary, binaryLen, base64);
+    if (paddingPolicy == ECE_BASE64URL_INCLUDE_PADDING) {
+      while (padLen) {
+        *base64++ = '=';
+        padLen--;
+      }
+    } else {
+      assert(paddingPolicy == ECE_BASE64URL_OMIT_PADDING);
+    }
+    *base64 = '\0';
+  }
+
+  // Don't count the trailing NUL as part of the encoded length. This is
+  // how the `sn*` functions work.
+  return requiredBase64Len - 1;
 }
 
 size_t
