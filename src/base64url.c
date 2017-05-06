@@ -226,10 +226,6 @@ ece_base64url_encode(const uint8_t* binary, size_t binaryLen,
     }
     requiredBase64Len += padLen;
   }
-  if (requiredBase64Len > SIZE_MAX - 1) {
-    return 0;
-  }
-  requiredBase64Len++;
 
   if (base64Len) {
     if (base64Len < requiredBase64Len) {
@@ -248,12 +244,9 @@ ece_base64url_encode(const uint8_t* binary, size_t binaryLen,
     } else {
       assert(paddingPolicy == ECE_BASE64URL_OMIT_PADDING);
     }
-    *base64 = '\0';
   }
 
-  // Don't count the trailing NUL as part of the encoded length. This is
-  // how the `sn*` functions work.
-  return requiredBase64Len - 1;
+  return requiredBase64Len;
 }
 
 size_t

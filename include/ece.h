@@ -468,17 +468,18 @@ ece_webpush_aesgcm_headers_extract_params(const char* cryptoKeyHeader,
  * \param binaryLen[in]     The length of the byte array.
  * \param paddingPolicy[in] The policy for padding the encoded output.
  * \param base64[in]        An empty array to hold the encoded result. May be
- *                          `NULL` if `base64Len` is 0.
- * \param base64Len[in]     The size of the empty `base64` array, including
- *                          room for the NUL terminator. On success,
- *                          `base64[0..base64Len - 1]` contains the result,
- *                          including a trailing NUL.
+ *                          `NULL` if `base64Len` is 0. This function does
+ *                          *not* null-terminate `base64`. This makes it easier
+ *                          to include Base64url-encoded substrings in larger
+ *                          strings, but means you'll need to add a trailing
+ *                          `'\0'` if you want to treat `base64` as a C string.
+ * \param base64Len[in]     The size of the empty `base64` array. On success,
+ *                          `base64[0..base64Len]` contains the result.
  *
- * \return                  The length of the encoded string, not including the
- *                          NUL terminator. If `binaryLen` is 0, returns the
+ * \return                  The encoded length. If `binaryLen` is 0, returns the
  *                          size of the array required to hold the result. If
  *                          `binaryLen` is not large enough to hold the full
- *                          string, returns 0.
+ *                          result, returns 0.
  */
 size_t
 ece_base64url_encode(const uint8_t* binary, size_t binaryLen,
