@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <openssl/bn.h>
 #include <openssl/ec.h>
@@ -147,12 +148,12 @@ vapid_build_signature_base(const char* aud, size_t audLen, uint32_t exp,
   // Determine the Base64url-encoded sizes of the header and payload, and
   // allocate a buffer large enough to hold the encoded strings and a `.`
   // separator.
-  size_t encodedHeaderLen =
+  size_t b64HeaderLen =
     ece_base64url_encode((const uint8_t*) VAPID_HEADER, VAPID_HEADER_LENGTH,
                          ECE_BASE64URL_OMIT_PADDING, NULL, 0);
-  size_t encodedPayloadLen = ece_base64url_encode(
+  size_t b64PayloadLen = ece_base64url_encode(
     (const uint8_t*) payload, payloadLen, ECE_BASE64URL_OMIT_PADDING, NULL, 0);
-  *sigBaseLen = encodedHeaderLen + encodedPayloadLen + 1;
+  *sigBaseLen = b64HeaderLen + b64PayloadLen + 1;
   sigBase = malloc(*sigBaseLen);
   if (!sigBase) {
     goto end;
@@ -160,11 +161,11 @@ vapid_build_signature_base(const char* aud, size_t audLen, uint32_t exp,
 
   // Finally, write the encoded header, a `.`, and the encoded payload.
   ece_base64url_encode((const uint8_t*) VAPID_HEADER, VAPID_HEADER_LENGTH,
-                       ECE_BASE64URL_OMIT_PADDING, sigBase, encodedHeaderLen);
-  sigBase[encodedHeaderLen] = '.';
+                       ECE_BASE64URL_OMIT_PADDING, sigBase, b64HeaderLen);
+  sigBase[b64HeaderLen] = '.';
   ece_base64url_encode((const uint8_t*) payload, payloadLen,
-                       ECE_BASE64URL_OMIT_PADDING,
-                       &sigBase[encodedHeaderLen + 1], encodedPayloadLen);
+                       ECE_BASE64URL_OMIT_PADDING, &sigBase[b64HeaderLen + 1],
+                       b64PayloadLen);
 
 end:
   free(quotedAud);
@@ -237,9 +238,9 @@ vapid_build_token(EC_KEY* key, const char* aud, size_t audLen, uint32_t exp,
   // The token comprises the base string, another `.`, and the encoded
   // signature. First, we grow the base string to hold the `.`, signature, and
   // null terminator.
-  size_t encodedSigLen =
+  size_t b64SigLen =
     ece_base64url_encode(sig, sigLen, ECE_BASE64URL_OMIT_PADDING, NULL, 0);
-  size_t tokenLen = sigBaseLen + 1 + encodedSigLen;
+  size_t tokenLen = sigBaseLen + 1 + b64SigLen;
   token = realloc(sigBase, tokenLen + 1);
   if (!token) {
     goto error;
@@ -249,7 +250,7 @@ vapid_build_token(EC_KEY* key, const char* aud, size_t audLen, uint32_t exp,
   // Then, we append the signature, and null-terminate the string.
   token[sigBaseLen] = '.';
   ece_base64url_encode(sig, sigLen, ECE_BASE64URL_OMIT_PADDING,
-                       &token[sigBaseLen + 1], encodedSigLen);
+                       &token[sigBaseLen + 1], b64SigLen);
   token[tokenLen] = '\0';
   goto end;
 
@@ -261,6 +262,11 @@ end:
   free(sigBase);
   free(sig);
   return token;
+}
+
+static EC_KEY*
+vapid_import_private_key(const char* b64PrivKey) {
+  return NULL;
 }
 
 static EC_KEY*
@@ -282,20 +288,20 @@ vapid_export_private_key(EC_KEY* key) {
   if (!EC_KEY_priv2oct(key, rawPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH)) {
     return NULL;
   }
-  size_t encodedLen =
+  size_t b64PrivKeyLen =
     ece_base64url_encode(rawPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH,
                          ECE_BASE64URL_OMIT_PADDING, NULL, 0);
-  if (!encodedLen) {
+  if (!b64PrivKeyLen) {
     return NULL;
   }
-  char* encodedPrivKey = malloc(encodedLen + 1);
-  if (!encodedPrivKey) {
+  char* b64PrivKey = malloc(b64PrivKeyLen + 1);
+  if (!b64PrivKey) {
     return NULL;
   }
   ece_base64url_encode(rawPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH,
-                       ECE_BASE64URL_OMIT_PADDING, encodedPrivKey, encodedLen);
-  encodedPrivKey[encodedLen] = '\0';
-  return encodedPrivKey;
+                       ECE_BASE64URL_OMIT_PADDING, b64PrivKey, b64PrivKeyLen);
+  b64PrivKey[b64PrivKeyLen] = '\0';
+  return b64PrivKey;
 }
 
 static char*
@@ -306,76 +312,116 @@ vapid_export_public_key(EC_KEY* key) {
                           ECE_WEBPUSH_PUBLIC_KEY_LENGTH, NULL)) {
     return NULL;
   }
-  size_t encodedLen =
+  size_t b64PubKeyLen =
     ece_base64url_encode(rawPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH,
                          ECE_BASE64URL_OMIT_PADDING, NULL, 0);
-  char* encodedPubKey = malloc(encodedLen + 1);
-  if (!encodedPubKey) {
+  char* b64PubKey = malloc(b64PubKeyLen + 1);
+  if (!b64PubKey) {
     return NULL;
   }
   ece_base64url_encode(rawPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH,
-                       ECE_BASE64URL_OMIT_PADDING, encodedPubKey, encodedLen);
-  encodedPubKey[encodedLen] = '\0';
-  return encodedPubKey;
+                       ECE_BASE64URL_OMIT_PADDING, b64PubKey, b64PubKeyLen);
+  b64PubKey[b64PubKeyLen] = '\0';
+  return b64PubKey;
+}
+
+static void
+usage(void) {
+  fprintf(stderr, "usage: vapid -a audience -e expiry -s subject [-k key]\n");
 }
 
 int
 main(int argc, char** argv) {
-  if (argc < 4) {
-    fprintf(stderr, "Usage: %s <push-server-url> <expiry> <contact-url>\n",
-            argv[0]);
-    return 2;
-  }
+  bool ok = true;
 
-  int err = 0;
-
+  char* aud = NULL;
+  uint32_t exp = 0;
+  char* sub = NULL;
   EC_KEY* key = NULL;
-  char* encodedPrivKey = NULL;
-  char* encodedPubKey = NULL;
+
+  char* b64PrivKey = NULL;
+  char* b64PubKey = NULL;
   char* token = NULL;
 
-  uint32_t exp;
-  if (sscanf(argv[2], "%" SCNu32, &exp) <= 0) {
-    fprintf(stderr, "vapid: Invalid expiry: %s\n", argv[2]);
-    goto error;
-  }
+  while (ok) {
+    int opt = getopt(argc, argv, "a:e:s:k:");
+    if (opt < 0) {
+      break;
+    }
+    switch (opt) {
+    case 'a':
+      aud = optarg;
+      break;
 
-  key = vapid_generate_keys();
+    case 'e':
+      ok = sscanf(optarg, "%" SCNu32, &exp) > 0;
+      if (!ok) {
+        fprintf(stderr, "vapid: Invalid expiry\n");
+      }
+      break;
+
+    case 's':
+      sub = optarg;
+      break;
+
+    case 'k':
+      key = vapid_import_private_key(optarg);
+      if (!key) {
+        fprintf(stderr, "vapid: Invalid EC private key\n");
+        ok = false;
+      }
+      break;
+
+    default:
+      usage();
+      ok = false;
+    }
+  }
+  if (!ok) {
+    goto end;
+  }
+  if (!aud || !exp || !sub) {
+    usage();
+    ok = false;
+    goto end;
+  }
   if (!key) {
-    fprintf(stderr, "vapid: Error generating ECDSA keys\n");
-    goto error;
+    key = vapid_generate_keys();
+    if (!key) {
+      fprintf(stderr, "vapid: Error generating EC keys\n");
+      ok = false;
+      goto end;
+    }
   }
-  encodedPrivKey = vapid_export_private_key(key);
-  if (!encodedPrivKey) {
+
+  b64PrivKey = vapid_export_private_key(key);
+  if (!b64PrivKey) {
     fprintf(stderr, "vapid: Error exporting private key\n");
-    goto error;
+    ok = false;
+    goto end;
   }
-  printf("Private Key: %s\n", encodedPrivKey);
-
-  encodedPubKey = vapid_export_public_key(key);
-  if (!encodedPubKey) {
+  b64PubKey = vapid_export_public_key(key);
+  if (!b64PubKey) {
     fprintf(stderr, "vapid: Error exporting public key\n");
-    goto error;
+    ok = false;
+    goto end;
   }
-  printf("Public key: %s\n", encodedPubKey);
-
-  token = vapid_build_token(key, argv[1], strlen(argv[1]), exp, argv[3],
-                            strlen(argv[3]));
+  token = vapid_build_token(key, aud, strlen(aud), exp, sub, strlen(sub));
   if (!token) {
-    fprintf(stderr, "vapid: Error generating token\n");
-    goto error;
+    fprintf(stderr, "vapid: Error signing token\n");
+    ok = false;
+    goto end;
   }
+
+  printf("Private key: %s\n", b64PrivKey);
+  printf("Public key: %s\n", b64PubKey);
+  printf("Expiry: %" PRIu32 "\n", exp);
   printf("Token: %s\n", token);
-
-  goto end;
-
-error:
-  err = 1;
 
 end:
   EC_KEY_free(key);
-  free(encodedPrivKey);
-  free(encodedPubKey);
+  free(b64PrivKey);
+  free(b64PubKey);
   free(token);
-  return err;
+  return !ok;
 }
