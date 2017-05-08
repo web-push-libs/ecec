@@ -178,7 +178,7 @@ test_webpush_aesgcm_encrypt_pad(void) {
 
   for (uint32_t rs = ECE_AESGCM_MIN_RS + 1; rs <= maxRs; rs++) {
     // Generate a random plaintext.
-    size_t plaintextLen = (size_t)(rand() % (maxRs - 1) + 1);
+    size_t plaintextLen = (size_t)(rand() % (int) (maxRs - 1) + 1);
     uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
     int ok = RAND_bytes(plaintext, (int) plaintextLen);
     ece_assert(ok == 1, "Got %d generating plaintext for rs = %d", ok, rs);

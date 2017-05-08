@@ -65,4 +65,9 @@ if(MSVC)
   target_compile_definitions(ece PUBLIC "_CRT_SECURE_NO_WARNINGS")
 else()
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -pedantic -Werror")
+  if(${CMAKE_C_COMPILER_ID} MATCHES "(Apple)?Clang")
+    # GCC's `-Wconversion` reports too many false positives; Clang's is more
+    # sophisticated.
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wconversion")
+  endif()
 endif()
