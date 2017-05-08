@@ -1,12 +1,14 @@
 #include "ece.h"
 
-// This file implements a Base64url decoder per RFC 4648. Originally implemented
-// in https://bugzilla.mozilla.org/show_bug.cgi?id=1256488 and
+// This file implements Base64url encoding and decoding per RFC 4648. Originally
+// implemented in https://bugzilla.mozilla.org/show_bug.cgi?id=1256488 and
 // https://bugzilla.mozilla.org/show_bug.cgi?id=1205137.
 
 #include <assert.h>
 #include <stdbool.h>
-#include <string.h>
+
+#define ECE_BASE64URL_INVALID_CHAR 64
+#define ECE_BASE64URL_INVALID_PADDING 3
 
 // Maps an index to a character in the Base64url alphabet.
 static const char ece_base64url_encode_table[] =
@@ -31,10 +33,9 @@ ece_base64url_base64_length(size_t binaryLen) {
   if (binaryLen / 3 > SIZE_MAX / 4) {
     return 0;
   }
-  size_t requiredBase64Len = (binaryLen / 3) * 4;
-
-  // The final quantum can be 2 or 3 bytes: 1 byte encodes to 2 bytes, and 2
-  // bytes encode to 3 bytes. We also include 1 byte for the NUL terminator.
+  // Base64 expands each 3-byte quantum to 4 bytes. The final quantum can be
+  // 2 or 3 bytes.
+  size_t baseLen = (binaryLen / 3) * 4;
   size_t finalLen = 0;
   switch (binaryLen % 3) {
   case 1:
@@ -45,16 +46,16 @@ ece_base64url_base64_length(size_t binaryLen) {
     finalLen = 3;
     break;
   }
-  if (finalLen > SIZE_MAX - requiredBase64Len) {
+  if (finalLen > SIZE_MAX - baseLen) {
     return 0;
   }
-  return requiredBase64Len + finalLen;
+  return baseLen + finalLen;
 }
 
-// Encodes a `binary` quantum into `base64`. A 3-byte quantum encodes to 4
-// bytes, a 2-byte quantum encodes to 3 bytes, and a 1-byte quantum encodes to
-// 2 bytes.
-static inline size_t
+// Encodes a `binary` quantum into `base64`, and returns the number of bytes
+// written. A 3-byte quantum encodes to 4 bytes, a 2-byte quantum encodes to
+// 3 bytes, and a 1-byte quantum encodes to 2 bytes.
+static inline int
 ece_base64url_encode_quantum(const uint8_t* binary, size_t binaryLen,
                              char* base64) {
   assert(binaryLen <= 3);
@@ -100,7 +101,7 @@ ece_base64url_decode_pad_length(const char* base64, size_t base64Len,
   case ECE_BASE64URL_REQUIRE_PADDING:
     if (base64Len % 4) {
       // Padded input length must be a multiple of 4.
-      return 3;
+      return ECE_BASE64URL_INVALID_PADDING;
     }
     maybePadded = true;
     break;
@@ -148,11 +149,11 @@ ece_base64url_binary_length(size_t base64Len) {
   return requiredBinaryLen;
 }
 
-// Converts a Base64url character `c` to its index. Returns 64 for characters
-// that aren't in the Base64url alphabet.
+// Converts a Base64url character `c` to its index.
 static inline uint8_t
 ece_base64url_decode_byte(char b) {
-  return (b & ~0x7f) ? 64 : ece_base64url_decode_table[b & 0x7f];
+  return (b & ~0x7f) ? ECE_BASE64URL_INVALID_CHAR
+                     : ece_base64url_decode_table[b & 0x7f];
 }
 
 // Decodes a `base64` encoded quantum into `binary`. A 4-byte quantum decodes to
@@ -166,7 +167,7 @@ ece_base64url_decode_quantum(const char* base64, size_t base64Len,
   uint32_t quantum = 0;
   for (size_t i = 0; i < base64Len; i++) {
     uint8_t b = ece_base64url_decode_byte(base64[i]);
-    if (b > 63) {
+    if (b == ECE_BASE64URL_INVALID_CHAR) {
       return false;
     }
     quantum <<= 6;
@@ -262,7 +263,7 @@ ece_base64url_decode(const char* base64, size_t base64Len,
   // Ensure we have enough room to hold the output.
   size_t padLen =
     ece_base64url_decode_pad_length(base64, base64Len, paddingPolicy);
-  if (padLen > 2) {
+  if (padLen == ECE_BASE64URL_INVALID_PADDING) {
     return 0;
   }
   base64Len -= padLen;
