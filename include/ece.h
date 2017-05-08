@@ -482,7 +482,7 @@ ece_webpush_aesgcm_headers_extract_params(const char* cryptoKeyHeader,
  *                          result, returns 0.
  */
 size_t
-ece_base64url_encode(const uint8_t* binary, size_t binaryLen,
+ece_base64url_encode(const void* binary, size_t binaryLen,
                      ece_base64url_encode_policy_t paddingPolicy, char* base64,
                      size_t base64Len);
 

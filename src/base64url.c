@@ -197,7 +197,7 @@ ece_base64url_decode_quantum(const char* base64, size_t base64Len,
 }
 
 size_t
-ece_base64url_encode(const uint8_t* binary, size_t binaryLen,
+ece_base64url_encode(const void* binary, size_t binaryLen,
                      ece_base64url_encode_policy_t paddingPolicy, char* base64,
                      size_t base64Len) {
   // Don't encode empty strings.
@@ -231,11 +231,12 @@ ece_base64url_encode(const uint8_t* binary, size_t binaryLen,
     if (base64Len < requiredBase64Len) {
       return 0;
     }
+    const uint8_t* input = binary;
     for (; binaryLen >= 3; binaryLen -= 3) {
-      base64 += ece_base64url_encode_quantum(binary, 3, base64);
-      binary += 3;
+      base64 += ece_base64url_encode_quantum(input, 3, base64);
+      input += 3;
     }
-    base64 += ece_base64url_encode_quantum(binary, binaryLen, base64);
+    base64 += ece_base64url_encode_quantum(input, binaryLen, base64);
     if (paddingPolicy == ECE_BASE64URL_INCLUDE_PADDING) {
       while (padLen) {
         *base64++ = '=';

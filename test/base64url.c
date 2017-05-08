@@ -124,10 +124,8 @@ test_base64url_encode(void) {
   for (size_t i = 0; i < tests; i++) {
     base64url_encode_test_t t = base64url_encode_tests[i];
 
-    const void* binary = t.binary;
-
     size_t requiredBase64Len =
-      ece_base64url_encode(binary, t.binaryLen, t.paddingPolicy, NULL, 0);
+      ece_base64url_encode(t.binary, t.binaryLen, t.paddingPolicy, NULL, 0);
     ece_assert(
       requiredBase64Len == t.base64Len,
       "Got required length %zu for `%s` with padding policy %d; want %zu",
@@ -139,7 +137,7 @@ test_base64url_encode(void) {
                t.base64, t.paddingPolicy);
 
     size_t actualBase64Len = ece_base64url_encode(
-      binary, t.binaryLen, t.paddingPolicy, base64, requiredBase64Len + 1);
+      t.binary, t.binaryLen, t.paddingPolicy, base64, requiredBase64Len + 1);
     ece_assert(actualBase64Len == t.base64Len,
                "Got length %zu for `%s` with padding policy %d; want %zu",
                actualBase64Len, t.base64, t.paddingPolicy, t.base64Len);
