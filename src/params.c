@@ -444,8 +444,7 @@ ece_webpush_aesgcm_headers_extract_params(const char* cryptoKeyHeader,
         ece_base64url_decode(pair->value, pair->valueLen,
                              ECE_BASE64URL_REJECT_PADDING, salt, saltLen);
       if (!decodedSaltLen) {
-        err = ECE_ERROR_INVALID_SALT;
-        goto end;
+        break;
       }
       continue;
     }
@@ -505,7 +504,7 @@ ece_webpush_aesgcm_headers_extract_params(const char* cryptoKeyHeader,
                                          rawSenderPubKey, rawSenderPubKeyLen);
     break;
   }
-  if (!decodedKeyLen) {
+  if (decodedKeyLen != rawSenderPubKeyLen) {
     err = ECE_ERROR_INVALID_DH;
     goto end;
   }

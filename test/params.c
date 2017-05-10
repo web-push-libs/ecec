@@ -38,7 +38,7 @@ static webpush_aesgcm_params_ok_test_t webpush_aesgcm_params_ok_tests[] = {
     .rs = 48,
   },
   {
-    .desc = "Quoted key param",
+    .desc = "Quoted key ID pair value",
     .cryptoKey = "dh=\"byfHbUffc-k\"",
     .encryption = "salt=C11AvAsp6Gc",
     .salt = "\x0b\x5d\x40\xbc\x0b\x29\xe8\x67",
@@ -46,9 +46,9 @@ static webpush_aesgcm_params_ok_test_t webpush_aesgcm_params_ok_tests[] = {
     .rs = 4096,
   },
   {
-    .desc = "Quoted salt param and rs = 24",
+    .desc = "Quoted salt pair value and rs = 24",
     .cryptoKey = "dh=ybuT4VDz-Bg",
-    .encryption = "salt=\"H7U7wcIoIKs\"; rs=24",
+    .encryption = "rs=24; salt=\"H7U7wcIoIKs\"",
     .salt = "\x1f\xb5\x3b\xc1\xc2\x28\x20\xab",
     .rawSenderPubKey = "\xc9\xbb\x93\xe1\x50\xf3\xf8\x18",
     .rs = 24,
@@ -61,6 +61,16 @@ static webpush_aesgcm_params_ok_test_t webpush_aesgcm_params_ok_tests[] = {
     .salt = "\x89\xef\xe8\x60\xb8\x70\xed\x22",
     .rawSenderPubKey = "\x23\xba\x79\x33\x4c\xb2\x3f\xc0",
     .rs = 6,
+  },
+  {
+    // Invalid, but we don't check the entire `Crypto-Key` param once we see a
+    // match.
+    .desc = "Duplicate key ID in Crypto-Key",
+    .cryptoKey = "keyid=a;keyid=b;dh=pbmv1QkcEDY",
+    .encryption = "salt=Esao8aTBfIk;keyid=b",
+    .salt = "\x12\xc6\xa8\xf1\xa4\xc1\x7c\x89",
+    .rawSenderPubKey = "\xa5\xb9\xaf\xd5\x09\x1c\x10\x36",
+    .rs = 4096,
   },
 };
 
@@ -84,43 +94,43 @@ static webpush_aesgcm_params_err_test_t webpush_aesgcm_params_err_tests[] = {
     .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
   },
   {
-    .desc = "Crypto-Key missing param value",
+    .desc = "Crypto-Key missing pair value",
     .cryptoKey = "dh=",
     .encryption = "salt=Esao8aTBfIk",
     .err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER,
   },
   {
-    .desc = "Encryption missing param value with trailing whitespace",
+    .desc = "Encryption missing pair value with trailing whitespace",
     .cryptoKey = "dh=pbmv1QkcEDY",
     .encryption = "salt= ",
     .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
   },
   {
-    .desc = "Crypto-Key param without value",
+    .desc = "Crypto-Key pair without value",
     .cryptoKey = "dh=pbmv1QkcEDY; keyid, dh=rqowftPcCVo",
     .encryption = "salt=Esao8aTBfIk",
     .err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER,
   },
   {
-    .desc = "Encryption param without value",
+    .desc = "Encryption pair without value",
     .cryptoKey = "dh=pbmv1QkcEDY",
     .encryption = "rs; salt=Esao8aTBfIk",
     .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
   },
   {
-    .desc = "Crypto-Key missing param name",
+    .desc = "Crypto-Key missing pair name",
     .cryptoKey = "dh=pbmv1QkcEDY; =rqowftPcCVo",
     .encryption = "salt=Esao8aTBfIk",
     .err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER,
   },
   {
-    .desc = "Encryption missing param name",
+    .desc = "Encryption missing pair name",
     .cryptoKey = "dh=pbmv1QkcEDY",
     .encryption = "=Esao8aTBfIk",
     .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
   },
   {
-    .desc = "Whitespace in quoted value in Crypto-Key header",
+    .desc = "Whitespace in quoted Crypto-Key pair value",
     .cryptoKey = "dh=byfHbUffc-k; param=\" \"",
     .encryption = "salt=C11AvAsp6Gc",
     .err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER,
@@ -132,13 +142,13 @@ static webpush_aesgcm_params_err_test_t webpush_aesgcm_params_err_tests[] = {
     .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
   },
   {
-    .desc = "Invalid character in Crypto-Key param value",
+    .desc = "Invalid character in Crypto-Key pair value",
     .cryptoKey = "dh==byfHbUffc-k",
     .encryption = "salt=C11AvAsp6Gc",
     .err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER,
   },
   {
-    .desc = "Invalid character in Encryption param name",
+    .desc = "Invalid character in Encryption pair name",
     .cryptoKey = "dh=byfHbUffc-k",
     .encryption = "sa!t=C11AvAsp6Gc",
     .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
@@ -198,7 +208,7 @@ static webpush_aesgcm_params_err_test_t webpush_aesgcm_params_err_tests[] = {
     .err = ECE_ERROR_INVALID_DH,
   },
   {
-    .desc = "Key ID with wrong param name",
+    .desc = "Key ID with matching pair value, wrong pair name",
     .cryptoKey = "p256dh=p256dh;dh=pbmv1QkcEDY",
     .encryption = "keyid=p256dh;salt=Esao8aTBfIk",
     .err = ECE_ERROR_INVALID_DH,
@@ -210,10 +220,52 @@ static webpush_aesgcm_params_err_test_t webpush_aesgcm_params_err_tests[] = {
     .err = ECE_ERROR_INVALID_SALT,
   },
   {
-    .desc = "Invalid Base64url-encoded dh param",
+    .desc = "Invalid Base64url-encoded dh pair value",
     .cryptoKey = "dh=zzzzz",
     .encryption = "salt=Esao8aTBfIk",
     .err = ECE_ERROR_INVALID_DH,
+  },
+  {
+    .desc = "Invalid character at end of salt pair name",
+    .cryptoKey = "dh=pbmv1QkcEDY",
+    .encryption = "salt !=Esao8aTBfIk",
+    .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
+  },
+  {
+    .desc = "Invalid character at end of salt",
+    .cryptoKey = "dh=pbmv1QkcEDY",
+    .encryption = "salt=Esao8aTBfIk!",
+    .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
+  },
+  {
+    .desc = "Invalid character after quoted dh pair value",
+    .cryptoKey = "dh=\"pbmv1QkcEDY\"!",
+    .encryption = "salt=Esao8aTBfIk",
+    .err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER,
+  },
+  {
+    .desc = "Duplicate key ID in Encryption header",
+    .cryptoKey = "keyid=b;dh=pbmv1QkcEDY",
+    .encryption = "keyid=a;salt=Esao8aTBfIk;keyid=b",
+    .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
+  },
+  {
+    .desc = "Duplicate record size in Encryption header",
+    .cryptoKey = "dh=pbmv1QkcEDY",
+    .encryption = "rs=5;salt=Esao8aTBfIk;rs=10",
+    .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
+  },
+  {
+    .desc = "Duplicate salt in Encryption header",
+    .cryptoKey = "dh=pbmv1QkcEDY",
+    .encryption = "salt=Esao8aTBfIk; salt=Esao8aTBfIk",
+    .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
+  },
+  {
+    .desc = "Missing salt in Encryption header",
+    .cryptoKey = "dh=pbmv1QkcEDY",
+    .encryption = "rs=5",
+    .err = ECE_ERROR_INVALID_SALT,
   },
 };
 
