@@ -294,7 +294,7 @@ test_webpush_aes128gcm_encrypt_ok(void) {
 
     uint8_t* payload = calloc(payloadLen, sizeof(uint8_t));
 
-    int err = ece_aes128gcm_encrypt_with_keys(
+    int err = ece_webpush_aes128gcm_encrypt_with_keys(
       senderPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, authSecret,
       ECE_WEBPUSH_AUTH_SECRET_LENGTH, salt, ECE_SALT_LENGTH, recvPubKey,
       ECE_WEBPUSH_PUBLIC_KEY_LENGTH, t.rs, t.padLen, plaintext, t.plaintextLen,
@@ -344,7 +344,7 @@ test_webpush_aes128gcm_encrypt_pad(void) {
       ece_aes128gcm_payload_max_length(rs, maxPadLen, plaintextLen);
     uint8_t* payload = calloc(payloadLen, sizeof(uint8_t));
 
-    int err = ece_aes128gcm_encrypt_with_keys(
+    int err = ece_webpush_aes128gcm_encrypt_with_keys(
       senderPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, authSecret,
       ECE_WEBPUSH_AUTH_SECRET_LENGTH, salt, ECE_SALT_LENGTH, recvPubKey,
       ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs, maxPadLen, plaintext, plaintextLen,
@@ -357,7 +357,7 @@ test_webpush_aes128gcm_encrypt_pad(void) {
     payloadLen = ece_aes128gcm_payload_max_length(rs, badPadLen, plaintextLen);
     payload = realloc(payload, payloadLen);
 
-    err = ece_aes128gcm_encrypt_with_keys(
+    err = ece_webpush_aes128gcm_encrypt_with_keys(
       senderPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, authSecret,
       ECE_WEBPUSH_AUTH_SECRET_LENGTH, salt, ECE_SALT_LENGTH, recvPubKey,
       ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs, badPadLen, plaintext, plaintextLen,

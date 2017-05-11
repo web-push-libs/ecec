@@ -20,9 +20,10 @@ test_webpush_aes128gcm_e2e(void) {
              payloadLen);
   uint8_t* payload = calloc(payloadLen, sizeof(uint8_t));
 
-  err = ece_aes128gcm_encrypt(rawRecvPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH,
-                              authSecret, ECE_WEBPUSH_AUTH_SECRET_LENGTH, 4096,
-                              0, input, inputLen, payload, &payloadLen);
+  err = ece_webpush_aes128gcm_encrypt(rawRecvPubKey,
+                                      ECE_WEBPUSH_PUBLIC_KEY_LENGTH, authSecret,
+                                      ECE_WEBPUSH_AUTH_SECRET_LENGTH, 4096, 0,
+                                      input, inputLen, payload, &payloadLen);
   ece_assert(!err, "Got %d encrypting plaintext", err);
   ece_assert(payloadLen == 144, "Got %zu for payload length; want 144",
              payloadLen);

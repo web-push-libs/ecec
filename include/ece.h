@@ -235,11 +235,12 @@ ece_aes128gcm_payload_max_length(uint32_t rs, size_t padLen,
  *                             encryption fails.
  */
 int
-ece_aes128gcm_encrypt(const uint8_t* rawRecvPubKey, size_t rawRecvPubKeyLen,
-                      const uint8_t* authSecret, size_t authSecretLen,
-                      uint32_t rs, size_t padLen, const uint8_t* plaintext,
-                      size_t plaintextLen, uint8_t* payload,
-                      size_t* payloadLen);
+ece_webpush_aes128gcm_encrypt(const uint8_t* rawRecvPubKey,
+                              size_t rawRecvPubKeyLen,
+                              const uint8_t* authSecret, size_t authSecretLen,
+                              uint32_t rs, size_t padLen,
+                              const uint8_t* plaintext, size_t plaintextLen,
+                              uint8_t* payload, size_t* payloadLen);
 
 /*!
  * Encrypts a Web Push message using the "aes128gcm" scheme, with an explicit
@@ -248,11 +249,12 @@ ece_aes128gcm_encrypt(const uint8_t* rawRecvPubKey, size_t rawRecvPubKeyLen,
  * messages.
  *
  * \warning                       In general, you should only use this function
- *                                for testing. `ece_aes128gcm_encrypt` is safer
- *                                because it doesn't risk accidental salt reuse.
+ *                                for testing. `ece_webpush_aes128gcm_encrypt`
+ *                                is safer because it doesn't risk accidental
+ *                                salt reuse.
  *
  * \sa                            ece_aes128gcm_payload_max_length(),
- *                                ece_aes128gcm_encrypt()
+ *                                ece_webpush_aes128gcm_encrypt()
  *
  * \param rawSenderPrivKey[in]    The sender private key.
  * \param rawSenderPrivKeyLen[in] The length of the sender private key. Must be
@@ -283,7 +285,7 @@ ece_aes128gcm_encrypt(const uint8_t* rawRecvPubKey, size_t rawRecvPubKeyLen,
  *                                encryption fails.
  */
 int
-ece_aes128gcm_encrypt_with_keys(
+ece_webpush_aes128gcm_encrypt_with_keys(
   const uint8_t* rawSenderPrivKey, size_t rawSenderPrivKeyLen,
   const uint8_t* authSecret, size_t authSecretLen, const uint8_t* salt,
   size_t saltLen, const uint8_t* rawRecvPubKey, size_t rawRecvPubKeyLen,
