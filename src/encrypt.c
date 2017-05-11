@@ -501,6 +501,79 @@ ece_aesgcm_ciphertext_max_length(uint32_t rs, size_t padLen,
 }
 
 int
+ece_webpush_aesgcm_encrypt(const uint8_t* rawRecvPubKey,
+                           size_t rawRecvPubKeyLen, const uint8_t* authSecret,
+                           size_t authSecretLen, uint32_t rs, size_t padLen,
+                           const uint8_t* plaintext, size_t plaintextLen,
+                           uint8_t* salt, size_t saltLen,
+                           uint8_t* rawSenderPubKey, size_t rawSenderPubKeyLen,
+                           uint8_t* ciphertext, size_t* ciphertextLen) {
+  int err = ECE_OK;
+
+  EC_KEY* recvPubKey = NULL;
+  EC_KEY* senderPrivKey = NULL;
+
+  rs = ece_aesgcm_rs(rs);
+  if (!rs) {
+    err = ECE_ERROR_INVALID_RS;
+    goto end;
+  }
+
+  if (saltLen != ECE_SALT_LENGTH) {
+    err = ECE_ERROR_INVALID_SALT;
+    goto end;
+  }
+  if (rawSenderPubKeyLen != ECE_WEBPUSH_PUBLIC_KEY_LENGTH) {
+    err = ECE_ERROR_INVALID_DH;
+    goto end;
+  }
+
+  // Generate a random salt.
+  if (saltLen > INT_MAX || RAND_bytes(salt, (int) saltLen) != 1) {
+    err = ECE_ERROR_INVALID_SALT;
+    goto end;
+  }
+
+  // Import the receiver public key.
+  recvPubKey = ece_import_public_key(rawRecvPubKey, rawRecvPubKeyLen);
+  if (!recvPubKey) {
+    err = ECE_ERROR_INVALID_PUBLIC_KEY;
+    goto end;
+  }
+
+  // Generate the sender ECDH key pair.
+  senderPrivKey = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+  if (!senderPrivKey) {
+    err = ECE_ERROR_OUT_OF_MEMORY;
+    goto end;
+  }
+  if (EC_KEY_generate_key(senderPrivKey) != 1) {
+    err = ECE_ERROR_INVALID_PRIVATE_KEY;
+    goto end;
+  }
+
+  if (!EC_POINT_point2oct(EC_KEY_get0_group(senderPrivKey),
+                          EC_KEY_get0_public_key(senderPrivKey),
+                          POINT_CONVERSION_UNCOMPRESSED, rawSenderPubKey,
+                          rawSenderPubKeyLen, NULL)) {
+    err = ECE_ERROR_ENCODE_PUBLIC_KEY;
+    goto end;
+  }
+
+  err = ece_webpush_encrypt_plaintext(
+    senderPrivKey, recvPubKey, authSecret, authSecretLen, salt, saltLen, rs,
+    ECE_AESGCM_PAD_SIZE, padLen, plaintext, plaintextLen,
+    &ece_webpush_aesgcm_derive_key_and_nonce, &ece_aesgcm_min_block_pad_length,
+    &ece_aesgcm_encrypt_block, &ece_aesgcm_needs_trailer, ciphertext,
+    ciphertextLen);
+
+end:
+  EC_KEY_free(recvPubKey);
+  EC_KEY_free(senderPrivKey);
+  return err;
+}
+
+int
 ece_webpush_aesgcm_encrypt_with_keys(
   const uint8_t* rawSenderPrivKey, size_t rawSenderPrivKeyLen,
   const uint8_t* authSecret, size_t authSecretLen, const uint8_t* salt,

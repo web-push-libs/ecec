@@ -294,14 +294,14 @@ ece_webpush_aes128gcm_encrypt_with_keys(
   uint8_t* payload, size_t* payloadLen);
 
 /*!
- * Calculates the maximum "aesgcm" ciphertext size. The caller should allocate
- * and pass an array of this size to `ece_webpush_aesgcm_encrypt_with_keys`.
+ * Calculates the maximum "aesgcm" ciphertext length. The caller should allocate
+ * and pass an array of this length to `ece_webpush_aesgcm_encrypt_with_keys`.
  *
  * \param rs[in]           The record size. Must be least `ECE_AESGCM_MIN_RS`.
  * \param padLen[in]       The length of additional padding.
  * \param plaintextLen[in] The length of the plaintext.
  *
- * \return                 The maximum ciphertext size, or 0 if `rs` is too
+ * \return                 The maximum ciphertext length, or 0 if `rs` is too
  *                         small.
  */
 size_t
@@ -309,9 +309,58 @@ ece_aesgcm_ciphertext_max_length(uint32_t rs, size_t padLen,
                                  size_t plaintextLen);
 
 /*!
- * Encrypts a Web Push message using the "aesgcm" scheme.
+ * Encrypts a Web Push message using the "aesgcm" scheme. Like
+ * `ece_webpush_aes128gcm_encrypt`, this function generates a sender key pair
+ * and salt.
  *
- * \sa                            ece_aesgcm_ciphertext_max_length()
+ * \sa                           ece_aesgcm_ciphertext_max_length()
+ *
+ * \param rawRecvPubKey[in]      The subscription public key, in uncompressed
+ *                               form.
+ * \param rawRecvPubKeyLen[in]   The length of the subscription public key. Must
+ *                               be `ECE_WEBPUSH_PUBLIC_KEY_LENGTH`.
+ * \param authSecret[in]         The authentication secret.
+ * \param authSecretLen[in]      The length of the authentication secret. Must
+ *                               be `ECE_WEBPUSH_AUTH_SECRET_LENGTH`.
+ * \param rs[in]                 The record size. Must be at least
+ *                               `ECE_AES128GCM_MIN_RS`.
+ * \param padLen[in]             The length of additional padding to include in
+ *                               the ciphertext, if any.
+ * \param plaintext[in]          The plaintext to encrypt.
+ * \param plaintextLen[in]       The length of the plaintext.
+ * \param salt[in]               An empty array to hold the salt.
+ * \param saltLen[in]            The length of the empty `salt` array. Must be
+ *                               `ECE_SALT_LENGTH`.
+ * \param rawSenderPubKey[in]    An empty array to hold the sender public key.
+ * \param rawSenderPubKeyLen[in] The length of the empty `rawSenderPubKey`
+ *                               array. Must be `ECE_WEBPUSH_PUBLIC_KEY_LENGTH`.
+ * \param ciphertext[in]         An empty array to hold the ciphertext.
+ * \param ciphertextLen[in, out] The input is the length of the empty
+ *                               `ciphertext` array. On success, the output is
+ *                               set to the actual ciphertext length, and
+ *                               `ciphertext[0..ciphertextLen]` contains the
+ *                               ciphertext.
+ *
+ * \return                       `ECE_OK` on success, or an error code if
+ *                               encryption fails.
+ */
+int
+ece_webpush_aesgcm_encrypt(const uint8_t* rawRecvPubKey,
+                           size_t rawRecvPubKeyLen, const uint8_t* authSecret,
+                           size_t authSecretLen, uint32_t rs, size_t padLen,
+                           const uint8_t* plaintext, size_t plaintextLen,
+                           uint8_t* salt, size_t saltLen,
+                           uint8_t* rawSenderPubKey, size_t rawSenderPubKeyLen,
+                           uint8_t* ciphertext, size_t* ciphertextLen);
+
+/*!
+ * Encrypts a Web Push message using the "aesgcm" scheme and explicit keys.
+ *
+ * \warning                       `ece_webpush_aesgcm_encrypt` is safer because
+ *                                it doesn't risk accidental salt reuse.
+ *
+ * \sa                            ece_aesgcm_ciphertext_max_length(),
+ *                                ece_webpush_aesgcm_encrypt()
  *
  * \param rawSenderPrivKey[in]    The sender private key.
  * \param rawSenderPrivKeyLen[in] The length of the sender private key. Must be

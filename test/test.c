@@ -24,6 +24,7 @@ main() {
   test_aes128gcm_decrypt_err();
 
   test_webpush_aes128gcm_e2e();
+  test_webpush_aesgcm_e2e();
 
   test_base64url_encode();
   test_base64url_decode();
