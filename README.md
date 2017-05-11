@@ -1,5 +1,6 @@
 # ecec
 
+![GitHub version](https://badge.fury.io/gh/web-push-libs%2Fecec.svg)
 [![Build Status](https://travis-ci.org/web-push-libs/ecec.svg?branch=master)](https://travis-ci.org/web-push-libs/ecec)
 [![Coverage](https://img.shields.io/codecov/c/github/web-push-libs/ecec/master.svg)](https://codecov.io/github/web-push-libs/ecec)
 

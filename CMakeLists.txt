@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
-project(ece VERSION 0.2.0 LANGUAGES C)
+project(ece VERSION 0.9.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_EXTENSIONS OFF)
