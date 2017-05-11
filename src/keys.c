@@ -1,4 +1,5 @@
 #include "ece/keys.h"
+#include "ece.h"
 
 #include <assert.h>
 #include <stdlib.h>

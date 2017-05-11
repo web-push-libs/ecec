@@ -9,6 +9,7 @@ extern "C" {
 #include <stdint.h>
 
 #define ECE_SALT_LENGTH 16
+#define ECE_TAG_LENGTH 16
 #define ECE_WEBPUSH_PRIVATE_KEY_LENGTH 32
 #define ECE_WEBPUSH_PUBLIC_KEY_LENGTH 65
 #define ECE_WEBPUSH_AUTH_SECRET_LENGTH 16

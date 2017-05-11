@@ -1,3 +1,4 @@
+#include "ece.h"
 #include "ece/keys.h"
 #include "ece/trailer.h"
 
@@ -340,10 +341,10 @@ ece_aes128gcm_plaintext_max_length(const uint8_t* payload, size_t payloadLen) {
 
 size_t
 ece_aesgcm_plaintext_max_length(uint32_t rs, size_t ciphertextLen) {
-  if (rs > UINT32_MAX - ECE_TAG_LENGTH) {
+  rs = ece_aesgcm_rs(rs);
+  if (!rs) {
     return 0;
   }
-  rs += ECE_TAG_LENGTH;
   return ece_plaintext_max_length(rs, ECE_AESGCM_PAD_SIZE, ciphertextLen);
 }
 
@@ -411,10 +412,10 @@ ece_webpush_aesgcm_decrypt(const uint8_t* rawRecvPrivKey,
                            size_t rawSenderPubKeyLen, uint32_t rs,
                            const uint8_t* ciphertext, size_t ciphertextLen,
                            uint8_t* plaintext, size_t* plaintextLen) {
-  if (rs > UINT32_MAX - ECE_TAG_LENGTH) {
-    return ECE_ERROR_INVALID_RS;
+  rs = ece_aesgcm_rs(rs);
+  if (!rs) {
+    return 0;
   }
-  rs += ECE_TAG_LENGTH;
   return ece_webpush_decrypt(
     rawRecvPrivKey, rawRecvPrivKeyLen, authSecret, authSecretLen, salt, saltLen,
     rawSenderPubKey, rawSenderPubKeyLen, rs, ECE_AESGCM_PAD_SIZE, ciphertext,

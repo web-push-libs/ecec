@@ -1,3 +1,4 @@
+#include "ece.h"
 #include "ece/keys.h"
 #include "ece/trailer.h"
 
@@ -491,12 +492,10 @@ end:
 size_t
 ece_aesgcm_ciphertext_max_length(uint32_t rs, size_t padLen,
                                  size_t plaintextLen) {
-  // The "aesgcm" record size includes the size of the padding delimiter, but
-  // not the auth tag.
-  if (rs > UINT32_MAX - ECE_TAG_LENGTH) {
+  rs = ece_aesgcm_rs(rs);
+  if (!rs) {
     return 0;
   }
-  rs += ECE_TAG_LENGTH;
   return ece_ciphertext_max_length(rs, ECE_AESGCM_PAD_SIZE, padLen,
                                    plaintextLen, &ece_aesgcm_needs_trailer);
 }
@@ -514,11 +513,11 @@ ece_webpush_aesgcm_encrypt_with_keys(
   EC_KEY* senderPrivKey = NULL;
   EC_KEY* recvPubKey = NULL;
 
-  if (rs > UINT32_MAX - ECE_TAG_LENGTH) {
+  rs = ece_aesgcm_rs(rs);
+  if (!rs) {
     err = ECE_ERROR_INVALID_RS;
     goto end;
   }
-  rs += ECE_TAG_LENGTH;
 
   senderPrivKey = ece_import_private_key(rawSenderPrivKey, rawSenderPrivKeyLen);
   if (!senderPrivKey) {
