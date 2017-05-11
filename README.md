@@ -97,8 +97,6 @@ All [Web Push libraries](https://github.com/web-push-libs) support the "aesgcm" 
 
 If the `Crypto-Key` header contains multiple keys, the sender must also include a `keyid` to match the encryption parameters to the key. The drafts have examples for [a single key without a `keyid`](https://tools.ietf.org/html/draft-ietf-webpush-encryption-04#section-5), and [multiple keys with `keyid`s](https://tools.ietf.org/html/draft-ietf-httpbis-encryption-encoding-02#section-5.6).
 
-**ecec** will extract the relevant parameters from the `Crypto-Key` and `Encryption` headers before decrypting the message. You don't need to parse the headers yourself.
-
 ```c
 uint8_t rawSubPrivKey[ECE_WEBPUSH_PRIVATE_KEY_LENGTH] = {0};
 uint8_t authSecret[ECE_WEBPUSH_AUTH_SECRET_LENGTH] = {0};
@@ -109,15 +107,26 @@ const char* encryptionHeader = "salt=...; rs=...";
 uint8_t* ciphertext = NULL;
 size_t ciphertextLen = 0;
 
-size_t plaintextLen = ece_aesgcm_plaintext_max_length(ciphertextLen);
+uint8_t salt[ECE_SALT_LENGTH];
+uint8_t rawSenderPubKey[ECE_WEBPUSH_PUBLIC_KEY_LENGTH];
+uint32_t rs = 0;
+int err =
+  ece_webpush_aesgcm_headers_extract_params(cryptoKeyHeader, encryptionHeader,
+                                            salt, ECE_SALT_LENGTH,
+                                            rawSenderPubKey,
+                                            ECE_WEBPUSH_PUBLIC_KEY_LENGTH, &rs);
+assert(err == ECE_OK);
+
+size_t plaintextLen = ece_aesgcm_plaintext_max_length(rs, ciphertextLen);
 assert(plaintextLen > 0);
 uint8_t* plaintext = calloc(plaintextLen, sizeof(uint8_t));
 assert(plaintext);
 
-int err = ece_webpush_aesgcm_decrypt(
+err = ece_webpush_aesgcm_decrypt(
   rawSubPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, authSecret,
-  ECE_WEBPUSH_AUTH_SECRET_LENGTH, cryptoKeyHeader, encryptionHeader, ciphertext,
-  ciphertextLen, plaintext, &plaintextLen);
+  ECE_WEBPUSH_AUTH_SECRET_LENGTH, salt, ECE_SALT_LENGTH, rawSenderPubKey,
+  ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs, ciphertext, ciphertextLen, plaintext,
+  &plaintextLen);
 assert(err == ECE_OK);
 
 // `plaintext[0..plaintextLen]` contains the decrypted message.
