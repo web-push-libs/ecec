@@ -19,10 +19,10 @@ ece_log(const char* funcName, int line, const char* expr, const char* format,
         ...);
 
 void
-test_webpush_aesgcm_params_ok(void);
+test_webpush_aesgcm_headers_extract_params_ok(void);
 
 void
-test_webpush_aesgcm_params_err(void);
+test_webpush_aesgcm_headers_extract_params_err(void);
 
 void
 test_webpush_aesgcm_encrypt_ok(void);

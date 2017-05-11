@@ -7,8 +7,8 @@
 
 int
 main() {
-  test_webpush_aesgcm_params_ok();
-  test_webpush_aesgcm_params_err();
+  test_webpush_aesgcm_headers_extract_params_ok();
+  test_webpush_aesgcm_headers_extract_params_err();
 
   test_webpush_aesgcm_encrypt_ok();
   test_webpush_aesgcm_encrypt_pad();
