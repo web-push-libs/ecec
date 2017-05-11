@@ -171,20 +171,20 @@ You can then build the library like so:
 > mkdir build
 > cd build
 > cmake -G "Visual Studio 14 2015 Win64" -DOPENSSL_ROOT_DIR=C:\OpenSSL-Win64 ..
-> cmake --build .
+> cmake --build . [--config Debug|Release]
 ```
 
 To build the decryption tool:
 
 ```powershell
-> cmake --build . --target ece-decrypt
-> .\Debug\ece-decrypt
+> cmake --build . --target ece-decrypt [--config Debug|Release]
+> .\[Debug|Release]\ece-decrypt
 ```
 
 To run the tests:
 
 ```powershell
-> cmake --build . --target check
+> cmake --build . --target check [--config Debug|Release]
 ```
 
 ## What is encrypted content-coding?

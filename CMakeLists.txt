@@ -53,11 +53,15 @@ set(ECE_TEST_SOURCES
   test/test.c)
 add_executable(ece-test ${ECE_TEST_SOURCES})
 set_target_properties(ece-test PROPERTIES EXCLUDE_FROM_ALL 1)
-target_include_directories(ece-test PRIVATE test)
-target_link_libraries(ece-test PRIVATE ece)
+target_include_directories(ece-test
+  PRIVATE test
+  PRIVATE ${OPENSSL_INCLUDE_DIR})
+target_link_libraries(ece-test
+  PRIVATE ece
+  PRIVATE ${OPENSSL_LIBRARIES})
 add_test(NAME ece-test COMMAND ece-test)
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND}
-  -C ${CMAKE_BUILD_TYPE} --output-on-failure)
+  -C $<CONFIG> --output-on-failure)
 add_dependencies(check ece-test)
 
 if(MSVC)
