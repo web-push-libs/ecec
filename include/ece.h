@@ -113,8 +113,9 @@ ece_webpush_generate_keys(uint8_t* rawRecvPrivKey, size_t rawRecvPrivKeyLen,
                           uint8_t* authSecret, size_t authSecretLen);
 
 /*!
- * Calculates the maximum "aes128gcm" plaintext size. The caller should allocate
- * and pass an array of this size to the "aes128gcm" decryption functions.
+ * Calculates the maximum "aes128gcm" plaintext length. The caller should
+ * allocate and pass an array of this length to the "aes128gcm" decryption
+ * functions.
  *
  * \sa                   ece_aes128gcm_decrypt(),
  *                       ece_webpush_aes128gcm_decrypt()
@@ -122,8 +123,8 @@ ece_webpush_generate_keys(uint8_t* rawRecvPrivKey, size_t rawRecvPrivKeyLen,
  * \param payload[in]    The encrypted payload.
  * \param payloadLen[in] The length of the encrypted payload.
  *
- * \return               The maximum plaintext size, or 0 if the payload header
- *                       is truncated or invalid.
+ * \return               The maximum plaintext length, or 0 if the payload
+ *                       header is truncated or invalid.
  */
 size_t
 ece_aes128gcm_plaintext_max_length(const uint8_t* payload, size_t payloadLen);
@@ -187,9 +188,9 @@ ece_webpush_aes128gcm_decrypt(const uint8_t* rawRecvPrivKey,
                               uint8_t* plaintext, size_t* plaintextLen);
 
 /*!
- * Calculates the maximum "aes128gcm" encrypted payload size. The caller should
- * allocate and pass an array of this size to the "aes128gcm" encryption
- * functions.
+ * Calculates the maximum "aes128gcm" encrypted payload length. The caller
+ * should allocate and pass an array of this length to the "aes128gcm"
+ * encryption functions.
  *
  * \param rs[in]           The record size. This is the length of each encrypted
  *                         plaintext chunk, including room for the padding
@@ -200,7 +201,8 @@ ece_webpush_aes128gcm_decrypt(const uint8_t* rawRecvPrivKey,
  *                         during encryption, and discarded during decryption.
  * \param plaintextLen[in] The length of the plaintext.
  *
- * \return                 The maximum payload size, or 0 if `rs` is too small.
+ * \return                 The maximum payload length, or 0 if `rs` is too
+ *                         small.
  */
 size_t
 ece_aes128gcm_payload_max_length(uint32_t rs, size_t padLen,
@@ -400,8 +402,8 @@ ece_webpush_aesgcm_encrypt_with_keys(
   uint8_t* ciphertext, size_t* ciphertextLen);
 
 /*!
- * Calculates the maximum "aesgcm" plaintext size. The caller should allocate
- * and pass an array of this size to `ece_webpush_aesgcm_decrypt`.
+ * Calculates the maximum "aesgcm" plaintext length. The caller should allocate
+ * and pass an array of this length to `ece_webpush_aesgcm_decrypt`.
  *
  * \sa                      ece_webpush_aesgcm_decrypt()
  *
@@ -409,7 +411,7 @@ ece_webpush_aesgcm_encrypt_with_keys(
  *                          `ECE_AESGCM_MIN_RS`.
  * \param ciphertextLen[in] The ciphertext length.
  *
- * \return                  The maximum plaintext size.
+ * \return                  The maximum plaintext length.
  */
 size_t
 ece_aesgcm_plaintext_max_length(uint32_t rs, size_t ciphertextLen);
@@ -581,11 +583,11 @@ ece_webpush_aesgcm_headers_from_params(const void* salt, size_t saltLen,
  *                          to include Base64url-encoded substrings in larger
  *                          strings, but means you'll need to add a trailing
  *                          `'\0'` if you want to treat `base64` as a C string.
- * \param base64Len[in]     The size of the empty `base64` array. On success,
+ * \param base64Len[in]     The length of the empty `base64` array. On success,
  *                          `base64[0..base64Len]` contains the result.
  *
  * \return                  The encoded length. If `binaryLen` is 0, returns the
- *                          size of the array required to hold the result. If
+ *                          length of the array required to hold the result. If
  *                          `binaryLen` is not large enough to hold the full
  *                          result, returns 0.
  */
@@ -603,11 +605,11 @@ ece_base64url_encode(const void* binary, size_t binaryLen,
  *                          input.
  * \param binary[in]        An empty array to hold the decoded result. May be
  *                          `NULL` if `binaryLen` is 0.
- * \param binaryLen[in]     The size of the empty `binary` array. On success,
+ * \param binaryLen[in]     The length of the empty `binary` array. On success,
  *                          `binary[0..binaryLen]` contains the result.
  *
  * \return                  The actual decoded length. If `binaryLen` is 0,
- *                          returns the size of the array
+ *                          returns the length of the array
  *                          required to hold the result. If `base64` contains
  *                          invalid characters, or `binaryLen` is not large
  *                          enough to hold the full result, returns 0.
