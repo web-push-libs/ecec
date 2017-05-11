@@ -7,6 +7,7 @@
 
 int
 main() {
+  test_webpush_aesgcm_headers_from_params();
   test_webpush_aesgcm_headers_extract_params_ok();
   test_webpush_aesgcm_headers_extract_params_err();
 

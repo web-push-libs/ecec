@@ -3,6 +3,44 @@
 #include <inttypes.h>
 #include <string.h>
 
+typedef struct webpush_aesgcm_from_params_test_s {
+  const char* cryptoKey;
+  const char* encryption;
+  const char* salt;
+  const char* rawSenderPubKey;
+  size_t cryptoKeyLen;
+  size_t encryptionLen;
+  size_t saltLen;
+  size_t rawSenderPubKeyLen;
+  uint32_t rs;
+} webpush_aesgcm_from_params_test_t;
+
+static webpush_aesgcm_from_params_test_t webpush_aesgcm_from_params_tests[] = {
+  {
+    .cryptoKey = "dh=Iy1Je2Kv11A",
+    .cryptoKeyLen = 14,
+    .encryption = "rs=7;salt=upk1yFkp1xI",
+    .encryptionLen = 21,
+    .salt = "\xba\x99\x35\xc8\x59\x29\xd7\x12",
+    .saltLen = 8,
+    .rawSenderPubKey = "\x23\x2d\x49\x7b\x62\xaf\xd7\x50",
+    .rawSenderPubKeyLen = 8,
+    .rs = 7,
+  },
+  {
+    .cryptoKey = "dh=mwyOULZ4upjVbCpQLRLOeg",
+    .cryptoKeyLen = 25,
+    .encryption = "rs=4096;salt=qzqku7FRdW9Vs97w8O8DoA",
+    .encryptionLen = 35,
+    .salt = "\xab\x3a\xa4\xbb\xb1\x51\x75\x6f\x55\xb3\xde\xf0\xf0\xef\x03\xa0",
+    .saltLen = 16,
+    .rawSenderPubKey =
+      "\x9b\x0c\x8e\x50\xb6\x78\xba\x98\xd5\x6c\x2a\x50\x2d\x12\xce\x7a",
+    .rawSenderPubKeyLen = 16,
+    .rs = 4096,
+  },
+};
+
 typedef struct webpush_aesgcm_extract_params_ok_test_s {
   const char* desc;
   const char* cryptoKey;
@@ -270,6 +308,45 @@ static webpush_aesgcm_extract_params_err_test_t
       .err = ECE_ERROR_INVALID_SALT,
     },
 };
+
+void
+test_webpush_aesgcm_headers_from_params(void) {
+  size_t length = sizeof(webpush_aesgcm_from_params_tests) /
+                  sizeof(webpush_aesgcm_from_params_test_t);
+  for (size_t i = 0; i < length; i++) {
+    webpush_aesgcm_from_params_test_t t = webpush_aesgcm_from_params_tests[i];
+
+    size_t cryptoKeyLen = 0;
+    size_t encryptionLen = 0;
+    int err = ece_webpush_aesgcm_headers_from_params(
+      t.salt, t.saltLen, t.rawSenderPubKey, t.rawSenderPubKeyLen, t.rs, NULL,
+      &cryptoKeyLen, NULL, &encryptionLen);
+    ece_assert(!err, "Got %d determining lengths for (%s, %s)", err,
+               t.cryptoKey, t.encryption);
+    ece_assert(cryptoKeyLen == t.cryptoKeyLen,
+               "Got Crypto-Key length %zu for (%s, %s); want %zu", cryptoKeyLen,
+               t.cryptoKey, t.encryption, t.cryptoKeyLen);
+    ece_assert(encryptionLen == t.encryptionLen,
+               "Got Encryption length %zu for (%s, %s); want %zu",
+               encryptionLen, t.cryptoKey, t.encryption, t.encryptionLen);
+
+    char* cryptoKey = malloc(cryptoKeyLen + 1);
+    char* encryption = malloc(encryptionLen + 1);
+
+    err = ece_webpush_aesgcm_headers_from_params(
+      t.salt, t.saltLen, t.rawSenderPubKey, t.rawSenderPubKeyLen, t.rs,
+      cryptoKey, &cryptoKeyLen, encryption, &encryptionLen);
+    ece_assert(!err, "Got %d formatting headers for (%s, %s)", err, t.cryptoKey,
+               t.encryption);
+    ece_assert(!memcmp(cryptoKey, t.cryptoKey, t.cryptoKeyLen),
+               "Wrong Crypto-Key for (%s, %s)", t.cryptoKey, t.encryption);
+    ece_assert(!memcmp(encryption, t.encryption, t.encryptionLen),
+               "Wrong Encryption for (%s, %s)", t.cryptoKey, t.encryption);
+
+    free(cryptoKey);
+    free(encryption);
+  }
+}
 
 void
 test_webpush_aesgcm_headers_extract_params_ok(void) {

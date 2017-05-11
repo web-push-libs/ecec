@@ -437,7 +437,8 @@ ece_aes128gcm_payload_extract_params(const uint8_t* payload, size_t payloadLen,
  * Extracts "aesgcm" decryption parameters from the `Crypto-Key` and
  * `Encryption` headers.
  *
- * \sa                           ece_webpush_aesgcm_decrypt()
+ * \sa                           ece_webpush_aesgcm_decrypt(),
+ *                               ece_webpush_aesgcm_headers_from_params()
  *
  * \param cryptoKeyHeader[in]    The value of the `Crypto-Key` HTTP header.
  * \param encryptionHeader[in]   The value of the `Encryption` HTTP header.
@@ -462,6 +463,61 @@ ece_webpush_aesgcm_headers_extract_params(const char* cryptoKeyHeader,
                                           uint8_t* rawSenderPubKey,
                                           size_t rawSenderPubKeyLen,
                                           uint32_t* rs);
+
+/*!
+ * Builds the `Crypto-Key` and `Encryption` headers from the "aesgcm"
+ * encryption parameters.
+ *
+ * \sa                               ece_webpush_aesgcm_encrypt_with_keys(),
+ *                                   ece_webpush_aesgcm_headers_extract_params()
+ *
+ * \param salt[in]                     The encryption salt, to include in the
+ *                                     `Encryption` header.
+ * \param saltLen[in]                  The length of the salt. Must be
+ *                                     `ECE_SALT_LENGTH`.
+ * \param rawSenderPubKey[in]          The sender public key, in uncompressed
+ *                                     form, to include in the `Crypto-Key`
+ *                                     header.
+ * \param rawSenderPubKeyLen[in]       The length of the sender public key. Must
+ *                                     be `ECE_WEBPUSH_PUBLIC_KEY_LENGTH`.
+ * \param rs[in]                       The record size, to include in the
+ *                                     `Encryption` header.
+ * \param cryptoKeyHeader[in]          An empty array to hold the `Crypto-Key`
+ *                                     header. May be `NULL` if
+ *                                     `cryptoKeyHeaderLen` is 0. The header is
+ *                                     *not* null-terminated; you'll need to add
+ *                                     a trailing `'\0'` if you want to treat
+ *                                     `cryptoKeyHeader` as a C string.
+ * \param cryptoKeyHeaderLen[in, out]  The input is the length of the empty
+ *                                     `cryptoKeyHeader` array. If 0, the output
+ *                                     is set to the length required to hold
+ *                                     the result. On success,
+ *                                     `[0..cryptoKeyHeaderLen]` contains the
+ *                                     header.
+ * \param encryptionHeader[in]         An empty array to hold the `Encryption`
+ *                                     header. May be `NULL` if
+ *                                     `encryptionHeaderLen` is 0. Like
+ *                                     `cryptoKeyHeader`, this header is not
+ *                                     null-terminated.
+ * \param encryptionHeaderLen[in, out] The input is the length of the empty
+ *                                     `encryptionHeader` array. If 0, the
+ *                                     output is set to the length required to
+ *                                     hold the result. On success,
+ *                                     `[0..encryptionHeaderLen]` contains the
+ *                                     header.
+ *
+ * \return                             `ECE_OK` on success, or an error code if
+ *                                     `cryptoKeyHeaderLen` or
+ *                                     `encryptionHeaderLen` is too small.
+ */
+int
+ece_webpush_aesgcm_headers_from_params(const void* salt, size_t saltLen,
+                                       const void* rawSenderPubKey,
+                                       size_t rawSenderPubKeyLen, uint32_t rs,
+                                       char* cryptoKeyHeader,
+                                       size_t* cryptoKeyHeaderLen,
+                                       char* encryptionHeader,
+                                       size_t* encryptionHeaderLen);
 
 /*!
  * Converts a byte array to a Base64url-encoded (RFC 4648) string.

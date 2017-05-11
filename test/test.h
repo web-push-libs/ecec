@@ -19,6 +19,9 @@ ece_log(const char* funcName, int line, const char* expr, const char* format,
         ...);
 
 void
+test_webpush_aesgcm_headers_from_params(void);
+
+void
 test_webpush_aesgcm_headers_extract_params_ok(void);
 
 void
