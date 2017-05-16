@@ -382,6 +382,12 @@ ece_webpush_aesgcm_encrypt(const uint8_t* rawRecvPubKey,
  *                                the ciphertext, if any.
  * \param plaintext[in]           The plaintext to encrypt.
  * \param plaintextLen[in]        The length of the plaintext.
+ * \param rawSenderPubKey[in]     An empty array to hold the sender public key,
+ *                                in uncompressed form, to include in the
+ *                                `Crypto-Key` header.
+ * \param rawSenderPubKeyLen[in]  The length of the empty `rawSenderPubKey`
+ *                                array. Must be
+ *                                `ECE_WEBPUSH_PUBLIC_KEY_LENGTH`.
  * \param ciphertext[in]          An empty array. Must be large enough to hold
  *                                the full ciphertext.
  * \param ciphertextLen[in,out]   The input is the length of the empty
@@ -399,7 +405,8 @@ ece_webpush_aesgcm_encrypt_with_keys(
   const uint8_t* authSecret, size_t authSecretLen, const uint8_t* salt,
   size_t saltLen, const uint8_t* rawRecvPubKey, size_t rawRecvPubKeyLen,
   uint32_t rs, size_t padLen, const uint8_t* plaintext, size_t plaintextLen,
-  uint8_t* ciphertext, size_t* ciphertextLen);
+  uint8_t* rawSenderPubKey, size_t rawSenderPubKeyLen, uint8_t* ciphertext,
+  size_t* ciphertextLen);
 
 /*!
  * Calculates the maximum "aesgcm" plaintext length. The caller should allocate

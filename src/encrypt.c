@@ -579,7 +579,8 @@ ece_webpush_aesgcm_encrypt_with_keys(
   const uint8_t* authSecret, size_t authSecretLen, const uint8_t* salt,
   size_t saltLen, const uint8_t* rawRecvPubKey, size_t rawRecvPubKeyLen,
   uint32_t rs, size_t padLen, const uint8_t* plaintext, size_t plaintextLen,
-  uint8_t* ciphertext, size_t* ciphertextLen) {
+  uint8_t* rawSenderPubKey, size_t rawSenderPubKeyLen, uint8_t* ciphertext,
+  size_t* ciphertextLen) {
 
   int err = ECE_OK;
 
@@ -600,6 +601,14 @@ ece_webpush_aesgcm_encrypt_with_keys(
   recvPubKey = ece_import_public_key(rawRecvPubKey, rawRecvPubKeyLen);
   if (!recvPubKey) {
     err = ECE_ERROR_INVALID_PUBLIC_KEY;
+    goto end;
+  }
+
+  if (!EC_POINT_point2oct(EC_KEY_get0_group(senderPrivKey),
+                          EC_KEY_get0_public_key(senderPrivKey),
+                          POINT_CONVERSION_UNCOMPRESSED, rawSenderPubKey,
+                          rawSenderPubKeyLen, NULL)) {
+    err = ECE_ERROR_ENCODE_PUBLIC_KEY;
     goto end;
   }
 

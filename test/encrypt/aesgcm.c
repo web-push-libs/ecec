@@ -9,6 +9,7 @@ typedef struct webpush_aesgcm_encrypt_ok_test_s {
   const char* desc;
   const char* ciphertext;
   const char* senderPrivKey;
+  const char* senderPubKey;
   const char* recvPubKey;
   const char* authSecret;
   const char* salt;
@@ -29,6 +30,11 @@ static webpush_aesgcm_encrypt_ok_test_t webpush_aesgcm_encrypt_ok_tests[] = {
     .senderPrivKey = "\x9c\x24\x9c\x7a\x4f\x90\xa4\x48\xe6\x38\xe9\x53\xfa"
                      "\xb4\x37\xf2\x76\x73\xbd\xd3\xe5\xa9\xad\x34\x67\x2d"
                      "\x22\xea\x6d\x8e\x26\xf6",
+    .senderPubKey = "\x04\xda\x11\x0d\xb6\xfc\xe0\x91\xa6\xf2\x0e\x59\xe4\x21"
+                    "\x71\xba\xb4\xaa\xb1\x75\x89\xd7\x52\x2d\x7d\x71\x16\x61"
+                    "\x52\xc4\xf3\x96\x3b\x09\x89\x03\x8d\x7b\x08\x11\xce\x1a"
+                    "\xab\x16\x1a\x43\x51\xbc\x06\xa9\x17\x08\x9e\x83\x3e\x90"
+                    "\xeb\x5a\xd7\x56\x8f\xf9\xae\x80\x75",
     .recvPubKey = "\x04\x21\x24\x06\x3c\xcb\xf1\x9d\xc2\xfa\x88\xb6\x43\xba"
                   "\x04\xe6\xdd\x8d\xa7\xea\x7b\xa2\xc8\xc6\x2e\x0f\x77\xa9"
                   "\x43\xf4\xc2\xfa\x91\x4f\x6d\x44\x11\x6c\x9f\xd1\xc4\x03"
@@ -79,6 +85,11 @@ static webpush_aesgcm_encrypt_ok_test_t webpush_aesgcm_encrypt_ok_tests[] = {
     .senderPrivKey = "\xf1\xfe\xd7\x17\xb0\xd8\x35\xd2\x9b\x9e\x4e\x4f\x4c"
                      "\xf8\x7d\x0c\xb9\x85\xe2\xbc\x44\xff\xd6\xd4\x37\xa4"
                      "\xe7\x4a\x18\x04\x55\x87",
+    .senderPubKey = "\x04\x01\x49\x68\x7d\xb9\x71\xa6\xfc\x7d\x51\x8d\xa8\x46"
+                    "\x2f\x06\x74\xfb\x85\x87\xc5\x4c\xcc\x16\xde\xc5\x79\x64"
+                    "\xac\x08\x81\x4a\xc1\xd2\x76\x7e\x80\xf9\x33\xeb\xe6\x8d"
+                    "\x5c\x45\x7c\xb4\x4c\x12\x6a\xd3\xc5\xe9\x2b\xf0\x8b\x6b"
+                    "\x24\x00\x1f\xe9\xdd\x46\xa3\x90\x29",
     .recvPubKey = "\x04\x09\x22\xf1\x7c\xed\x7d\x09\xd4\x55\x10\x2d\xd9\x0c"
                   "\x31\x46\xce\x33\x2f\x45\xd2\x34\x96\x46\xfe\x64\xca\xbb"
                   "\x7f\x41\x23\x03\xbe\x5c\x23\x53\x9a\xff\x5c\x30\x72\xdd"
@@ -104,6 +115,11 @@ static webpush_aesgcm_encrypt_ok_test_t webpush_aesgcm_encrypt_ok_tests[] = {
     .senderPrivKey = "\xe3\x31\x8e\xc3\x99\xa9\xc4\x71\x7a\xa9\x4b\xa4\xed\xb3"
                      "\xaa\x1d\x90\x96\x5c\xe7\x6a\x57\x6b\x52\xa0\x7c\x27\x44"
                      "\x0c\x6d\x9b\xd1",
+    .senderPubKey = "\x04\x28\x6c\xee\x44\x48\x54\x71\x8e\x81\x82\xbc\x87\x55"
+                    "\x71\x62\x91\xb5\xc0\xae\xb4\x9e\x88\x7b\x90\x12\xd2\x8c"
+                    "\x86\x04\x7a\xd4\x8c\xf6\xc2\x15\x29\x57\xb4\x63\x1c\xaa"
+                    "\x9c\x59\x39\xc6\xd8\x3f\x4d\x10\x78\x04\x71\x28\xba\xe7"
+                    "\x7e\x68\x05\xed\x2c\xbc\x6f\x6b\x51",
     .recvPubKey = "\x04\xaa\xec\x79\x05\x22\xad\x2b\x70\x56\x05\x58\x99\xda\xa6"
                   "\x47\x7d\x55\xab\x3f\x16\x5d\x76\x00\x56\x19\xf3\xdf\xa9\x72"
                   "\x19\xf5\x59\x02\x5d\x09\xc0\x80\x83\x70\xc6\x06\x8a\x66\x51"
@@ -142,13 +158,18 @@ test_webpush_aesgcm_encrypt_ok(void) {
 
     uint8_t* ciphertext = calloc(ciphertextLen, sizeof(uint8_t));
 
+    uint8_t senderPubKey[ECE_WEBPUSH_PUBLIC_KEY_LENGTH];
+
     int err = ece_webpush_aesgcm_encrypt_with_keys(
       senderPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, authSecret,
       ECE_WEBPUSH_AUTH_SECRET_LENGTH, salt, ECE_SALT_LENGTH, recvPubKey,
       ECE_WEBPUSH_PUBLIC_KEY_LENGTH, t.rs, t.padLen, plaintext, t.plaintextLen,
-      ciphertext, &ciphertextLen);
+      senderPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH, ciphertext, &ciphertextLen);
     ece_assert(!err, "Got %d encrypting ciphertext for `%s`", err, t.desc);
 
+    ece_assert(
+      !memcmp(senderPubKey, t.senderPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH),
+      "Wrong sender public key for `%s`", t.desc);
     ece_assert(ciphertextLen == t.ciphertextLen,
                "Got actual ciphertext length %zu for `%s`; want %zu",
                ciphertextLen, t.desc, t.ciphertextLen);
@@ -176,6 +197,8 @@ test_webpush_aesgcm_encrypt_pad(void) {
     "\x10\xe3\x02\x2a\xb5\x6a\x0e\xa9\xb8\xec\x06\x73\x8a\xce\x41\x1f\x49\x54"
     "\x7b\xc0\x0d\x1a\x1c\xde\x97\xce\x7b\xdd\x26";
 
+  uint8_t senderPubKey[ECE_WEBPUSH_PUBLIC_KEY_LENGTH];
+
   for (uint32_t rs = ECE_AESGCM_MIN_RS + 1; rs <= maxRs; rs++) {
     // Generate a random plaintext.
     size_t plaintextLen = (size_t)(rand() % (int) (maxRs - 1) + 1);
@@ -194,7 +217,7 @@ test_webpush_aesgcm_encrypt_pad(void) {
       senderPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, authSecret,
       ECE_WEBPUSH_AUTH_SECRET_LENGTH, salt, ECE_SALT_LENGTH, recvPubKey,
       ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs, maxPadLen, plaintext, plaintextLen,
-      ciphertext, &ciphertextLen);
+      senderPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH, ciphertext, &ciphertextLen);
     ece_assert(!err, "Got %d encrypting with rs = %d, padLen = %zu", err, rs,
                maxPadLen);
 
@@ -208,7 +231,7 @@ test_webpush_aesgcm_encrypt_pad(void) {
       senderPrivKey, ECE_WEBPUSH_PRIVATE_KEY_LENGTH, authSecret,
       ECE_WEBPUSH_AUTH_SECRET_LENGTH, salt, ECE_SALT_LENGTH, recvPubKey,
       ECE_WEBPUSH_PUBLIC_KEY_LENGTH, rs, badPadLen, plaintext, plaintextLen,
-      ciphertext, &ciphertextLen);
+      senderPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH, ciphertext, &ciphertextLen);
     ece_assert(err == ECE_ERROR_ENCRYPT_PADDING,
                "Want error encrypting with rs = %d, padLen = %zu", rs,
                badPadLen);
