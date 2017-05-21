@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
-project(ece VERSION 0.9.0 LANGUAGES C)
+project(ece VERSION 0.9.1 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_EXTENSIONS OFF)
@@ -23,10 +23,9 @@ set_target_properties(ece PROPERTIES
   OUTPUT_NAME ece
   VERSION "${ECE_VERSION}")
 target_include_directories(ece
-  PUBLIC include
-  PRIVATE src
-  PRIVATE ${OPENSSL_INCLUDE_DIR})
-target_link_libraries(ece PRIVATE ${OPENSSL_LIBRARIES})
+  PUBLIC include)
+target_link_libraries(ece
+  PRIVATE OpenSSL::Crypto)
 if(DEFINED ENV{COVERAGE})
   target_compile_options(ece PUBLIC "-fprofile-arcs;-ftest-coverage")
   target_link_libraries(ece PUBLIC --coverage)
@@ -54,11 +53,9 @@ set(ECE_TEST_SOURCES
 add_executable(ece-test ${ECE_TEST_SOURCES})
 set_target_properties(ece-test PROPERTIES EXCLUDE_FROM_ALL 1)
 target_include_directories(ece-test
-  PRIVATE test
-  PRIVATE ${OPENSSL_INCLUDE_DIR})
+  PRIVATE test)
 target_link_libraries(ece-test
-  PRIVATE ece
-  PRIVATE ${OPENSSL_LIBRARIES})
+  PRIVATE ece)
 add_test(NAME ece-test COMMAND ece-test)
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND}
   -C $<CONFIG> --output-on-failure)
