@@ -136,7 +136,7 @@ vapid_build_signature_base(const char* aud, size_t audLen, uint32_t exp,
     goto end;
   }
   // Allocate an extra byte for the null terminator, which `sprintf` appends.
-  payload = malloc(payloadLen + 1);
+  payload = malloc((size_t) payloadLen + 1);
   if (!payload) {
     goto end;
   }
@@ -148,11 +148,10 @@ vapid_build_signature_base(const char* aud, size_t audLen, uint32_t exp,
   // Determine the Base64url-encoded sizes of the header and payload, and
   // allocate a buffer large enough to hold the encoded strings and a `.`
   // separator.
-  size_t b64HeaderLen =
-    ece_base64url_encode((const uint8_t*) VAPID_HEADER, VAPID_HEADER_LENGTH,
-                         ECE_BASE64URL_OMIT_PADDING, NULL, 0);
+  size_t b64HeaderLen = ece_base64url_encode(
+    VAPID_HEADER, VAPID_HEADER_LENGTH, ECE_BASE64URL_OMIT_PADDING, NULL, 0);
   size_t b64PayloadLen = ece_base64url_encode(
-    (const uint8_t*) payload, payloadLen, ECE_BASE64URL_OMIT_PADDING, NULL, 0);
+    payload, (size_t) payloadLen, ECE_BASE64URL_OMIT_PADDING, NULL, 0);
   *sigBaseLen = b64HeaderLen + b64PayloadLen + 1;
   sigBase = malloc(*sigBaseLen);
   if (!sigBase) {
@@ -160,12 +159,11 @@ vapid_build_signature_base(const char* aud, size_t audLen, uint32_t exp,
   }
 
   // Finally, write the encoded header, a `.`, and the encoded payload.
-  ece_base64url_encode((const uint8_t*) VAPID_HEADER, VAPID_HEADER_LENGTH,
+  ece_base64url_encode(VAPID_HEADER, VAPID_HEADER_LENGTH,
                        ECE_BASE64URL_OMIT_PADDING, sigBase, b64HeaderLen);
   sigBase[b64HeaderLen] = '.';
-  ece_base64url_encode((const uint8_t*) payload, payloadLen,
-                       ECE_BASE64URL_OMIT_PADDING, &sigBase[b64HeaderLen + 1],
-                       b64PayloadLen);
+  ece_base64url_encode(payload, (size_t) payloadLen, ECE_BASE64URL_OMIT_PADDING,
+                       &sigBase[b64HeaderLen + 1], b64PayloadLen);
 
 end:
   free(quotedAud);
@@ -197,8 +195,8 @@ vapid_sign(EC_KEY* key, const void* sigBase, size_t sigBaseLen,
   }
   ECDSA_SIG_get0(sig, &r, &s);
 
-  int rLen = BN_num_bytes(r);
-  int sLen = BN_num_bytes(s);
+  size_t rLen = (size_t) BN_num_bytes(r);
+  size_t sLen = (size_t) BN_num_bytes(s);
   *sigLen = rLen + sLen;
   rawSig = calloc(*sigLen, sizeof(uint8_t));
   if (!rawSig) {
