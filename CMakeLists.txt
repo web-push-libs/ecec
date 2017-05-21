@@ -23,9 +23,10 @@ set_target_properties(ece PROPERTIES
   OUTPUT_NAME ece
   VERSION "${ECE_VERSION}")
 target_include_directories(ece
-  PUBLIC include)
+  PUBLIC include
+  PUBLIC ${OPENSSL_INCLUDE_DIR})
 target_link_libraries(ece
-  PRIVATE OpenSSL::Crypto)
+  PUBLIC ${OPENSSL_LIBRARIES})
 if(DEFINED ENV{COVERAGE})
   target_compile_options(ece PUBLIC "-fprofile-arcs;-ftest-coverage")
   target_link_libraries(ece PUBLIC --coverage)
