@@ -12,6 +12,7 @@ addons:
       - cmake
       - cmake-data
       - electric-fence
+      - moreutils
       - valgrind
 
 cache:

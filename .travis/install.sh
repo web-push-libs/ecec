@@ -14,21 +14,15 @@ configs="--prefix=$HOME/.local --openssldir=$HOME/.local"
 if [[ $CMAKE_BUILD_TYPE = "Debug" ]]; then
   configs="$configs -d"
 fi
-if ! ./config $configs &>> build.log ||
-   ! make &>> build.log ||
-   ! make install &>> build.log; then
-  cat build.log
-  exit 1
-fi
+chronic ./config $configs
+chronic make
+chronic make install
 popd
 
 if [[ "$COVERAGE" -eq 1 ]]; then
   tar xzf $HOME/.src/lcov-$LCOV_VERSION.tar.gz
   pushd lcov-$LCOV_VERSION
-  if ! make -e PREFIX=$HOME/.local install &>> build.log; then
-    cat build.log
-    exit 1
-  fi
+  chronic make -e PREFIX=$HOME/.local install
   popd
 fi
 
