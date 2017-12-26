@@ -4,7 +4,7 @@
 [![Build Status](https://travis-ci.org/web-push-libs/ecec.svg?branch=master)](https://travis-ci.org/web-push-libs/ecec)
 [![Coverage](https://img.shields.io/codecov/c/github/web-push-libs/ecec/master.svg)](https://codecov.io/github/web-push-libs/ecec)
 
-**ecec** is a C implementation of the [HTTP Encrypted Content-Encoding](http://httpwg.org/http-extensions/draft-ietf-httpbis-encryption-encoding.html) draft. It's a port of the reference [JavaScript implementation](https://github.com/martinthomson/encrypted-content-encoding).
+**ecec** is a C implementation of [HTTP Encrypted Content-Encoding](https://tools.ietf.org/html/rfc8188). It's a port of the reference [JavaScript implementation](https://github.com/martinthomson/encrypted-content-encoding).
 
 Encrypted content-coding is used to encrypt [Web Push messages](https://webpush-wg.github.io/webpush-encryption/), and can be used standalone.
 
@@ -13,7 +13,11 @@ Encrypted content-coding is used to encrypt [Web Push messages](https://webpush-
 - [Usage](#usage)
   * [Generating subscription keys](#generating-subscription-keys)
   * [`aes128gcm`](#aes128gcm)
+    + [Encryption](#encryption)
+    + [Decryption](#decryption)
   * [`aesgcm`](#aesgcm)
+    + [Encryption](#encryption-1)
+    + [Decryption](#decryption-1)
 - [Building](#building)
   * [Dependencies](#dependencies)
   * [macOS and \*nix](#macos-and-nix)
@@ -60,7 +64,91 @@ main() {
 
 ### `aes128gcm`
 
-This is the scheme from the latest version of the encrypted content-coding draft. It's not currently supported by any encryption library or browser, but will eventually replace `aesgcm`. This scheme removes the `Crypto-Key` and `Encryption` headers. Instead, the salt, record size, and sender public key are included in the payload as a binary header block.
+This is the scheme described in [RFC 8188](https://tools.ietf.org/html/rfc8188). It's supported in Firefox 55+ and Chrome 60+, and replaces the older `aesgcm` scheme from earlier drafts. This scheme includes the salt, record size, and sender public key in a binary header block in the payload.
+
+#### Encryption
+
+This example program writes an encrypted Web Push message to a file, then prints out a [`curl`](https://curl.haxx.se/) command to send the message.
+
+```c
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <ece.h>
+
+int
+main() {
+  // The endpoint, public key, and auth secret for the push subscription. These
+  // are exposed via `JSON.stringify(pushSubscription)` in the browser.
+  const char* endpoint = "https://updates.push.services.mozilla.com/...";
+  const char* p256dh = "BDwwYm4O5dZG9SO6Vaz168iDLGWMmitkj5LFvunvMfgmI2fZdAEaiHT"
+                       "DfKR0fvr0D3V56cSGSeUwP0xNdrXho5k";
+  const char* auth = "xcmQLthL5H2pJNuxrZO-qQ";
+
+  // The message to encrypt.
+  const void* plaintext = "I'm just like my country, I'm young, scrappy, and "
+                          "hungry, and I'm not throwing away my shot.";
+  size_t plaintextLen = strlen(plaintext);
+
+  // How many bytes of padding to include in the encrypted message. Padding
+  // obfuscates the plaintext length, making it harder to guess the contents
+  // based on the encrypted payload length.
+  size_t padLen = 0;
+
+  // Base64url-decode the subscription public key and auth secret. `recv` is
+  // short for "receiver", which, in our case, is the browser.
+  uint8_t rawRecvPubKey[ECE_WEBPUSH_PUBLIC_KEY_LENGTH];
+  size_t rawRecvPubKeyLen =
+    ece_base64url_decode(p256dh, strlen(p256dh), ECE_BASE64URL_REJECT_PADDING,
+                         rawRecvPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH);
+  assert(rawRecvPubKeyLen > 0);
+  uint8_t authSecret[ECE_WEBPUSH_AUTH_SECRET_LENGTH];
+  size_t authSecretLen =
+    ece_base64url_decode(auth, strlen(auth), ECE_BASE64URL_REJECT_PADDING,
+                         authSecret, ECE_WEBPUSH_AUTH_SECRET_LENGTH);
+  assert(authSecretLen > 0);
+
+  // Allocate a buffer large enough to hold the encrypted payload. The payload
+  // length depends on the record size, padding, and plaintext length, plus a
+  // fixed-length header block. Smaller records and additional padding take
+  // more space. The maximum payload length rounds up to the nearest whole
+  // record, so the actual length after encryption might be smaller.
+  size_t payloadLen = ece_aes128gcm_payload_max_length(ECE_WEBPUSH_DEFAULT_RS,
+                                                       padLen, plaintextLen);
+  assert(payloadLen > 0);
+  uint8_t* payload = calloc(payloadLen, sizeof(uint8_t));
+  assert(payload);
+
+  // Encrypt the plaintext. `payload` holds the header block and ciphertext;
+  // `payloadLen` is an in-out parameter set to the actual payload length.
+  int err = ece_webpush_aes128gcm_encrypt(
+    rawRecvPubKey, rawRecvPubKeyLen, authSecret, authSecretLen,
+    ECE_WEBPUSH_DEFAULT_RS, padLen, plaintext, plaintextLen, payload,
+    &payloadLen);
+  assert(err == ECE_OK);
+
+  // Write the payload out to a file.
+  const char* filename = "aes128gcm.bin";
+  FILE* payloadFile = fopen(filename, "wb");
+  assert(payloadFile);
+  size_t payloadFileLen =
+    fwrite(payload, sizeof(uint8_t), payloadLen, payloadFile);
+  assert(payloadLen == payloadFileLen);
+  fclose(payloadFile);
+
+  printf(
+    "curl -v -X POST -H \"Content-Encoding: aes128gcm\" --data-binary @%s %s\n",
+    filename, endpoint);
+
+  free(payload);
+
+  return 0;
+}
+```
+
+#### Decryption
 
 ```c
 // Assume `rawSubPrivKey` and `authSecret` contain the subscription private key
@@ -97,6 +185,107 @@ All [Web Push libraries](https://github.com/web-push-libs) support the "aesgcm" 
 * The `Encryption` header must include a `salt` name-value pair containing the sender's Base64url-encoded salt, and an optional `rs` pair specifying the record size.
 
 If the `Crypto-Key` header contains multiple keys, the sender must also include a `keyid` to match the encryption parameters to the key. The drafts have examples for [a single key without a `keyid`](https://tools.ietf.org/html/draft-ietf-webpush-encryption-04#section-5), and [multiple keys with `keyid`s](https://tools.ietf.org/html/draft-ietf-httpbis-encryption-encoding-02#section-5.6).
+
+#### Encryption
+
+```c
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <ece.h>
+
+int
+main() {
+  const char* endpoint = "https://updates.push.services.mozilla.com/...";
+  const char* p256dh = "BDwwYm4O5dZG9SO6Vaz168iDLGWMmitkj5LFvunvMfgmI2fZdAEaiHT"
+                       "DfKR0fvr0D3V56cSGSeUwP0xNdrXho5k";
+  const char* auth = "xcmQLthL5H2pJNuxrZO-qQ";
+
+  const void* plaintext = "I'm just like my country, I'm young, scrappy, and "
+                          "hungry, and I'm not throwing away my shot.";
+  size_t plaintextLen = strlen(plaintext);
+
+  size_t padLen = 0;
+
+  uint8_t rawRecvPubKey[ECE_WEBPUSH_PUBLIC_KEY_LENGTH];
+  size_t rawRecvPubKeyLen =
+    ece_base64url_decode(p256dh, strlen(p256dh), ECE_BASE64URL_REJECT_PADDING,
+                         rawRecvPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH);
+  assert(rawRecvPubKeyLen > 0);
+  uint8_t authSecret[ECE_WEBPUSH_AUTH_SECRET_LENGTH];
+  size_t authSecretLen =
+    ece_base64url_decode(auth, strlen(auth), ECE_BASE64URL_REJECT_PADDING,
+                         authSecret, ECE_WEBPUSH_AUTH_SECRET_LENGTH);
+  assert(authSecretLen > 0);
+
+  size_t ciphertextLen = ece_aesgcm_ciphertext_max_length(
+    ECE_WEBPUSH_DEFAULT_RS, padLen, plaintextLen);
+  assert(ciphertextLen > 0);
+  uint8_t* ciphertext = calloc(ciphertextLen, sizeof(uint8_t));
+  assert(ciphertext);
+
+  // Encrypt the plaintext and fetch encryption parameters for the headers.
+  // `salt` holds the encryption salt, which we include in the `Encryption`
+  // header. `rawSenderPubKey` holds the ephemeral sender, or app server,
+  // public key, which we include as the `dh` parameter in the `Crypto-Key`
+  // header. `ciphertextLen` is an in-out parameter set to the actual ciphertext
+  // length.
+  uint8_t salt[ECE_SALT_LENGTH];
+  uint8_t rawSenderPubKey[ECE_WEBPUSH_PUBLIC_KEY_LENGTH];
+  int err = ece_webpush_aesgcm_encrypt(
+    rawRecvPubKey, rawRecvPubKeyLen, authSecret, authSecretLen,
+    ECE_WEBPUSH_DEFAULT_RS, padLen, plaintext, plaintextLen, salt,
+    ECE_SALT_LENGTH, rawSenderPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH, ciphertext,
+    &ciphertextLen);
+  assert(err == ECE_OK);
+
+  // Build the `Crypto-Key` and `Encryption` HTTP headers. First, we pass
+  // `NULL`s for `cryptoKeyHeader` and `encryptionHeader`, and 0 for their
+  // lengths, to calculate the lengths of the buffers we need. Then, we
+  // allocate, write out, and null-terminate the headers.
+  size_t cryptoKeyHeaderLen = 0;
+  size_t encryptionHeaderLen = 0;
+  err = ece_webpush_aesgcm_headers_from_params(
+    salt, ECE_SALT_LENGTH, rawSenderPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH,
+    ECE_WEBPUSH_DEFAULT_RS, NULL, &cryptoKeyHeaderLen, NULL,
+    &encryptionHeaderLen);
+  assert(err == ECE_OK);
+  // Allocate an extra byte for the null terminator.
+  char* cryptoKeyHeader = calloc(cryptoKeyHeaderLen + 1, 1);
+  assert(cryptoKeyHeader);
+  char* encryptionHeader = calloc(encryptionHeaderLen + 1, 1);
+  assert(encryptionHeader);
+  err = ece_webpush_aesgcm_headers_from_params(
+    salt, ECE_SALT_LENGTH, rawSenderPubKey, ECE_WEBPUSH_PUBLIC_KEY_LENGTH,
+    ECE_WEBPUSH_DEFAULT_RS, cryptoKeyHeader, &cryptoKeyHeaderLen,
+    encryptionHeader, &encryptionHeaderLen);
+  assert(err == ECE_OK);
+  cryptoKeyHeader[cryptoKeyHeaderLen] = '\0';
+  encryptionHeader[encryptionHeaderLen] = '\0';
+
+  const char* filename = "aesgcm.bin";
+  FILE* ciphertextFile = fopen(filename, "wb");
+  assert(ciphertextFile);
+  size_t ciphertextFileLen =
+    fwrite(ciphertext, sizeof(uint8_t), ciphertextLen, ciphertextFile);
+  assert(ciphertextLen == ciphertextFileLen);
+  fclose(ciphertextFile);
+
+  printf("curl -v -X POST -H \"Content-Encoding: aesgcm\" -H \"Crypto-Key: "
+         "%s\" -H \"Encryption: %s\" --data-binary @%s %s\n",
+         cryptoKeyHeader, encryptionHeader, filename, endpoint);
+
+  free(ciphertext);
+  free(cryptoKeyHeader);
+  free(encryptionHeader);
+
+  return 0;
+}
+```
+
+#### Decryption
 
 ```c
 uint8_t rawSubPrivKey[ECE_WEBPUSH_PRIVATE_KEY_LENGTH] = {0};
