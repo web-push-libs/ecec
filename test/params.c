@@ -47,6 +47,8 @@ typedef struct webpush_aesgcm_extract_params_ok_test_s {
   const char* encryption;
   const char* salt;
   const char* rawSenderPubKey;
+  size_t saltLen;
+  size_t rawSenderPubKeyLen;
   uint32_t rs;
 } webpush_aesgcm_extract_params_ok_test_t;
 
@@ -57,7 +59,9 @@ static webpush_aesgcm_extract_params_ok_test_t
       .cryptoKey = "keyid=p256dh;dh=Iy1Je2Kv11A,p256ecdsa=o2M8QfiEKuI",
       .encryption = "keyid=p256dh;salt=upk1yFkp1xI",
       .salt = "\xba\x99\x35\xc8\x59\x29\xd7\x12",
+      .saltLen = 8,
       .rawSenderPubKey = "\x23\x2d\x49\x7b\x62\xaf\xd7\x50",
+      .rawSenderPubKeyLen = 8,
       .rs = 4096,
     },
     {
@@ -66,7 +70,9 @@ static webpush_aesgcm_extract_params_ok_test_t
       .encryption =
         "salt=upk1yFkp1xI;rs=48;keyid=p256dh,salt=U0DM1JsdIbU;keyid=a",
       .salt = "\xba\x99\x35\xc8\x59\x29\xd7\x12",
+      .saltLen = 8,
       .rawSenderPubKey = "\x23\x2d\x49\x7b\x62\xaf\xd7\x50",
+      .rawSenderPubKeyLen = 8,
       .rs = 48,
     },
     {
@@ -74,7 +80,9 @@ static webpush_aesgcm_extract_params_ok_test_t
       .cryptoKey = "dh=\"byfHbUffc-k\"",
       .encryption = "salt=C11AvAsp6Gc",
       .salt = "\x0b\x5d\x40\xbc\x0b\x29\xe8\x67",
+      .saltLen = 8,
       .rawSenderPubKey = "\x6f\x27\xc7\x6d\x47\xdf\x73\xe9",
+      .rawSenderPubKeyLen = 8,
       .rs = 4096,
     },
     {
@@ -82,7 +90,9 @@ static webpush_aesgcm_extract_params_ok_test_t
       .cryptoKey = "dh=ybuT4VDz-Bg",
       .encryption = "rs=24; salt=\"H7U7wcIoIKs\"",
       .salt = "\x1f\xb5\x3b\xc1\xc2\x28\x20\xab",
+      .saltLen = 8,
       .rawSenderPubKey = "\xc9\xbb\x93\xe1\x50\xf3\xf8\x18",
+      .rawSenderPubKeyLen = 8,
       .rs = 24,
     },
     {
@@ -91,7 +101,9 @@ static webpush_aesgcm_extract_params_ok_test_t
       .encryption = "salt=ie_oYLhw7SI; keyid=\"hello\"; rs =6 , salt = "
                     "6NAh50bfJZc ;keyid=ujIToeKunCY ",
       .salt = "\x89\xef\xe8\x60\xb8\x70\xed\x22",
+      .saltLen = 8,
       .rawSenderPubKey = "\x23\xba\x79\x33\x4c\xb2\x3f\xc0",
+      .rawSenderPubKeyLen = 8,
       .rs = 6,
     },
     {
@@ -101,8 +113,20 @@ static webpush_aesgcm_extract_params_ok_test_t
       .cryptoKey = "keyid=a;keyid=b;dh=pbmv1QkcEDY",
       .encryption = "salt=Esao8aTBfIk;keyid=b",
       .salt = "\x12\xc6\xa8\xf1\xa4\xc1\x7c\x89",
+      .saltLen = 8,
       .rawSenderPubKey = "\xa5\xb9\xaf\xd5\x09\x1c\x10\x36",
+      .rawSenderPubKeyLen = 8,
       .rs = 4096,
+    },
+    {
+      .desc = "Quoted pair values with Base64 padding",
+      .cryptoKey = "dh=\"yAbnQuLS8wQaZA==\";keyid=a",
+      .encryption = "salt=\"LrGfRMSObiU=\";rs=4",
+      .salt = "\x2e\xb1\x9f\x44\xc4\x8e\x6e\x25",
+      .saltLen = 8,
+      .rawSenderPubKey = "\xc8\x06\xe7\x42\xe2\xd2\xf3\x04\x1a\x64",
+      .rawSenderPubKeyLen = 10,
+      .rs = 4,
     },
 };
 
@@ -110,6 +134,8 @@ typedef struct webpush_aesgcm_extract_params_err_test_s {
   const char* desc;
   const char* cryptoKey;
   const char* encryption;
+  size_t saltLen;
+  size_t rawSenderPubKeyLen;
   int err;
 } webpush_aesgcm_extract_params_err_test_t;
 
@@ -119,193 +145,273 @@ static webpush_aesgcm_extract_params_err_test_t
       .desc = "Invalid record size",
       .cryptoKey = "dh=pbmv1QkcEDY",
       .encryption = "salt=Esao8aTBfIk;rs=bad",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_RS,
     },
     {
       .desc = "Blank Crypto-Key header",
       .cryptoKey = " \t ",
       .encryption = "salt=Esao8aTBfIk",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 1,
       .err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER,
     },
     {
       .desc = "Empty Encryption header",
       .cryptoKey = "dh=pbmv1QkcEDY",
       .encryption = "",
+      .saltLen = 1,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
     },
     {
       .desc = "Crypto-Key missing pair value",
       .cryptoKey = "dh=",
       .encryption = "salt=Esao8aTBfIk",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 1,
       .err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER,
     },
     {
       .desc = "Encryption missing pair value with trailing whitespace",
       .cryptoKey = "dh=pbmv1QkcEDY",
       .encryption = "salt= ",
+      .saltLen = 1,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
     },
     {
       .desc = "Crypto-Key pair without value",
       .cryptoKey = "dh=pbmv1QkcEDY; keyid, dh=rqowftPcCVo",
       .encryption = "salt=Esao8aTBfIk",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER,
     },
     {
       .desc = "Encryption pair without value",
       .cryptoKey = "dh=pbmv1QkcEDY",
       .encryption = "rs; salt=Esao8aTBfIk",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
     },
     {
       .desc = "Crypto-Key missing pair name",
       .cryptoKey = "dh=pbmv1QkcEDY; =rqowftPcCVo",
       .encryption = "salt=Esao8aTBfIk",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER,
     },
     {
       .desc = "Encryption missing pair name",
       .cryptoKey = "dh=pbmv1QkcEDY",
       .encryption = "=Esao8aTBfIk",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
     },
     {
       .desc = "Whitespace in quoted Crypto-Key pair value",
       .cryptoKey = "dh=byfHbUffc-k; param=\" \"",
       .encryption = "salt=C11AvAsp6Gc",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER,
     },
     {
       .desc = "Empty quoted value in Encryption header",
       .cryptoKey = "dh=byfHbUffc-k",
       .encryption = "salt=\"\"; rs=6",
+      .saltLen = 1,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
     },
     {
       .desc = "Invalid character in Crypto-Key pair value",
       .cryptoKey = "dh==byfHbUffc-k",
       .encryption = "salt=C11AvAsp6Gc",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER,
     },
     {
       .desc = "Invalid character in Encryption pair name",
       .cryptoKey = "dh=byfHbUffc-k",
       .encryption = "sa!t=C11AvAsp6Gc",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
     },
     {
       .desc = "Leading , in Crypto-Key header",
       .cryptoKey = ",dh=byfHbUffc-k",
       .encryption = "salt=C11AvAsp6Gc",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER,
     },
     {
       .desc = "Trailing ; in Crypto-Key header",
       .cryptoKey = "dh=byfHbUffc-k;",
       .encryption = "salt=C11AvAsp6Gc",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER,
     },
     {
       .desc = "Leading ; in Encryption header",
       .cryptoKey = "dh=byfHbUffc-k",
       .encryption = "; salt=C11AvAsp6Gc",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
     },
     {
       .desc = "Trailing , in Encryption header",
       .cryptoKey = "dh=byfHbUffc-k",
       .encryption = "salt=C11AvAsp6Gc,",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
     },
     {
       .desc = "Unterminated quoted value in Encryption header",
       .cryptoKey = "dh=byfHbUffc-k",
       .encryption = "rs=6; salt=\"C11AvAsp6Gc",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
     },
     {
       .desc = "Invalid quoted name in Crypto-Key header",
       .cryptoKey = "\"dh\"=\"byfHbUffc-k\"",
       .encryption = "salt=C11AvAsp6Gc",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER,
     },
     {
       .desc = "Invalid quoted name in Encryption header",
       .cryptoKey = "dh=byfHbUffc-k",
       .encryption = "\"salt\"=C11AvAsp6Gc",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
     },
     {
       .desc = "Mismatched key IDs",
       .cryptoKey = "keyid=p256dh;dh=pbmv1QkcEDY",
       .encryption = "keyid=different;salt=Esao8aTBfIk",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_DH,
     },
     {
       .desc = "Multiple mismatched key IDs",
       .cryptoKey = "keyid=a;dh=bX0VbuZy8HQ,dh=Iy1Je2Kv11A;keyid=b",
       .encryption = "salt=upk1yFkp1xI;rs=48;keyid=c,salt=U0DM1JsdIbU;keyid=d",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_DH,
     },
     {
       .desc = "Key ID with matching pair value, wrong pair name",
       .cryptoKey = "p256dh=p256dh;dh=pbmv1QkcEDY",
       .encryption = "keyid=p256dh;salt=Esao8aTBfIk",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_DH,
     },
     {
       .desc = "Invalid Base64url-encoded salt",
       .cryptoKey = "dh=pbmv1QkcEDY",
       .encryption = "salt=99999",
+      .saltLen = 3,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_SALT,
     },
     {
       .desc = "Invalid Base64url-encoded dh pair value",
       .cryptoKey = "dh=zzzzz",
       .encryption = "salt=Esao8aTBfIk",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 3,
       .err = ECE_ERROR_INVALID_DH,
     },
     {
       .desc = "Invalid character at end of salt pair name",
       .cryptoKey = "dh=pbmv1QkcEDY",
       .encryption = "salt !=Esao8aTBfIk",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
     },
     {
       .desc = "Invalid character at end of salt",
       .cryptoKey = "dh=pbmv1QkcEDY",
       .encryption = "salt=Esao8aTBfIk!",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
     },
     {
       .desc = "Invalid character after quoted dh pair value",
       .cryptoKey = "dh=\"pbmv1QkcEDY\"!",
       .encryption = "salt=Esao8aTBfIk",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER,
     },
     {
       .desc = "Duplicate key ID in Encryption header",
       .cryptoKey = "keyid=b;dh=pbmv1QkcEDY",
       .encryption = "keyid=a;salt=Esao8aTBfIk;keyid=b",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
     },
     {
       .desc = "Duplicate record size in Encryption header",
       .cryptoKey = "dh=pbmv1QkcEDY",
       .encryption = "rs=5;salt=Esao8aTBfIk;rs=10",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
     },
     {
       .desc = "Duplicate salt in Encryption header",
       .cryptoKey = "dh=pbmv1QkcEDY",
       .encryption = "salt=Esao8aTBfIk; salt=Esao8aTBfIk",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
     },
     {
       .desc = "Missing salt in Encryption header",
       .cryptoKey = "dh=pbmv1QkcEDY",
       .encryption = "rs=5",
+      .saltLen = 1,
+      .rawSenderPubKeyLen = 8,
       .err = ECE_ERROR_INVALID_SALT,
+    },
+    {
+      .desc = "Unquoted dh with Base64 padding",
+      .cryptoKey = "dh=yAbnQuLS8wQaZA==; keyid=a",
+      .encryption = "salt=\"LrGfRMSObiU=\"",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 10,
+      .err = ECE_ERROR_INVALID_CRYPTO_KEY_HEADER,
+    },
+    {
+      .desc = "Unquoted salt with Base64 padding",
+      .cryptoKey = "dh=\"yAbnQuLS8wQaZA==\";keyid=a",
+      .encryption = "salt=LrGfRMSObiU=",
+      .saltLen = 8,
+      .rawSenderPubKeyLen = 10,
+      .err = ECE_ERROR_INVALID_ENCRYPTION_HEADER,
     },
 };
 
@@ -356,18 +462,23 @@ test_webpush_aesgcm_headers_extract_params_ok(void) {
     webpush_aesgcm_extract_params_ok_test_t t =
       webpush_aesgcm_extract_params_ok_tests[i];
 
-    uint8_t salt[8];
+    uint8_t* salt = calloc(t.saltLen, sizeof(uint8_t));
     uint32_t rs;
-    uint8_t rawSenderPubKey[8];
+    uint8_t* rawSenderPubKey = calloc(t.rawSenderPubKeyLen, sizeof(uint8_t));
     int err = ece_webpush_aesgcm_headers_extract_params(
-      t.cryptoKey, t.encryption, salt, 8, rawSenderPubKey, 8, &rs);
+      t.cryptoKey, t.encryption, salt, t.saltLen, rawSenderPubKey,
+      t.rawSenderPubKeyLen, &rs);
 
     ece_assert(!err, "Got %d extracting params for `%s`", err, t.desc);
-    ece_assert(!memcmp(salt, t.salt, 8), "Wrong salt for `%s`", t.desc);
+    ece_assert(!memcmp(salt, t.salt, t.saltLen), "Wrong salt for `%s`", t.desc);
     ece_assert(rs == t.rs, "Got rs = %" PRIu32 " for `%s`; want %" PRIu32, rs,
                t.desc, t.rs);
-    ece_assert(!memcmp(rawSenderPubKey, t.rawSenderPubKey, 8),
-               "Wrong public key for `%s`", t.desc);
+    ece_assert(
+      !memcmp(rawSenderPubKey, t.rawSenderPubKey, t.rawSenderPubKeyLen),
+      "Wrong public key for `%s`", t.desc);
+
+    free(salt);
+    free(rawSenderPubKey);
   }
 }
 
@@ -379,13 +490,17 @@ test_webpush_aesgcm_headers_extract_params_err(void) {
     webpush_aesgcm_extract_params_err_test_t t =
       webpush_aesgcm_extract_params_err_tests[i];
 
-    uint8_t salt[8];
+    uint8_t* salt = calloc(t.saltLen, sizeof(uint8_t));
     uint32_t rs;
-    uint8_t rawSenderPubKey[8];
+    uint8_t* rawSenderPubKey = calloc(t.rawSenderPubKeyLen, sizeof(uint8_t));
     int err = ece_webpush_aesgcm_headers_extract_params(
-      t.cryptoKey, t.encryption, salt, 8, rawSenderPubKey, 8, &rs);
+      t.cryptoKey, t.encryption, salt, t.saltLen, rawSenderPubKey,
+      t.rawSenderPubKeyLen, &rs);
 
     ece_assert(err == t.err, "Got %d extracting params for `%s`; want %d", err,
                t.desc, t.err);
+
+    free(salt);
+    free(rawSenderPubKey);
   }
 }

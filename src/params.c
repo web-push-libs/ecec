@@ -172,6 +172,15 @@ ece_header_is_valid_pair_value(char c) {
          (c >= '0' && c <= '9') || c == '-' || c == '_';
 }
 
+// Indicates whether `c` can appear in a quoted pair value. This includes all
+// Base64url characters, and `=` for padding. Quoted strings also allow spaces
+// and escapes, but neither `Crypto-Key` nor `Encryption` accept them. We keep
+// the parser simple by rejecting all other characters.
+static inline bool
+ece_header_is_valid_quoted_pair_value(char c) {
+  return ece_header_is_valid_pair_value(c) || c == '=';
+}
+
 // A header parameter parser.
 typedef struct ece_header_parser_s {
   int state;
@@ -257,10 +266,8 @@ ece_header_parse(ece_header_parser_t* parser, const char* input) {
     break;
 
   case ECE_HEADER_STATE_BEGIN_QUOTED_VALUE:
-    if (ece_header_is_valid_pair_value(*input)) {
-      // Quoted strings allow spaces and escapes, but neither `Crypto-Key` nor
-      // `Encryption` accept them. We keep the parser simple by rejecting
-      // non-Base64url characters here. We also disallow empty quoted strings.
+    // Disallow empty and invalid quoted strings.
+    if (ece_header_is_valid_quoted_pair_value(*input)) {
       parser->params->pairs->value = input;
       parser->params->pairs->valueLen++;
       parser->state = ECE_HEADER_STATE_QUOTED_VALUE;
@@ -269,7 +276,7 @@ ece_header_parse(ece_header_parser_t* parser, const char* input) {
     break;
 
   case ECE_HEADER_STATE_QUOTED_VALUE:
-    if (ece_header_is_valid_pair_value(*input)) {
+    if (ece_header_is_valid_quoted_pair_value(*input)) {
       parser->params->pairs->valueLen++;
       return true;
     }
@@ -438,14 +445,16 @@ ece_webpush_aesgcm_headers_extract_params(const char* cryptoKeyHeader,
       continue;
     }
     if (ece_header_pairs_has_name(pair, "salt")) {
-      // The salt is required, and must be Base64url-encoded without padding.
+      // The salt is required, and must be Base64url-encoded. RFC 7515,
+      // Appendix C omits padding, but some servers include it (#37),
+      // so we ignore padding.
       if (decodedSaltLen) {
         err = ECE_ERROR_INVALID_ENCRYPTION_HEADER;
         goto end;
       }
       decodedSaltLen =
         ece_base64url_decode(pair->value, pair->valueLen,
-                             ECE_BASE64URL_REJECT_PADDING, salt, saltLen);
+                             ECE_BASE64URL_IGNORE_PADDING, salt, saltLen);
       if (!decodedSaltLen) {
         break;
       }
@@ -501,9 +510,9 @@ ece_webpush_aesgcm_headers_extract_params(const char* cryptoKeyHeader,
     if (!ece_header_pairs_has_name(pair, "dh")) {
       continue;
     }
-    // The sender's public key must be Base64url-encoded without padding.
+    // The sender's public key must be Base64url-encoded.
     decodedKeyLen = ece_base64url_decode(pair->value, pair->valueLen,
-                                         ECE_BASE64URL_REJECT_PADDING,
+                                         ECE_BASE64URL_IGNORE_PADDING,
                                          rawSenderPubKey, rawSenderPubKeyLen);
     break;
   }
