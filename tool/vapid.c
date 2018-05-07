@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -8,103 +9,11 @@
 #include <openssl/sha.h>
 
 #include <ece.h>
+#include <ece/json.h>
 #include <ece/keys.h>
 
 #define VAPID_HEADER "{\"alg\":\"ES256\",\"typ\":\"JWT\"}"
 #define VAPID_HEADER_LENGTH 27
-
-static const char vapid_hex_table[] = "0123456789abcdef";
-
-// Indicates whether `c` is an ASCII control character, and must be escaped
-// to appear in a JSON string.
-static inline bool
-vapid_json_escape_is_control(char c) {
-  return c >= '\0' && c <= '\x1f';
-}
-
-// Returns an escaped literal for a control character, double quote, or reverse
-// solidus; `\0` otherwise.
-static inline char
-vapid_json_escape_literal(char c) {
-  switch (c) {
-  case '\b':
-    return 'b';
-  case '\n':
-    return 'n';
-  case '\f':
-    return 'f';
-  case '\r':
-    return 'r';
-  case '\t':
-    return 't';
-  case '"':
-  case '\\':
-    return c;
-  }
-  return '\0';
-}
-
-// Writes a Unicode escape sequence for a control character.
-static inline size_t
-vapid_json_escape_unicode(char c, char* result) {
-  result[0] = '\\';
-  result[1] = 'u';
-  result[2] = '0';
-  result[3] = '0';
-  result[4] = vapid_hex_table[(c >> 4) & 0xf];
-  result[5] = vapid_hex_table[c & 0xf];
-  return 6;
-}
-
-// Returns the length of `str` as a JSON string, including room for double
-// quotes and escape sequences for special characters.
-static size_t
-vapid_json_quoted_length(const char* str, size_t strLen) {
-  // 2 bytes for the opening and closing quotes.
-  size_t len = 2;
-  for (size_t i = 0; i < strLen; i++) {
-    if (vapid_json_escape_literal(str[i])) {
-      // 2 bytes: "\", followed by the escaped literal.
-      len += 2;
-    } else if (vapid_json_escape_is_control(str[i])) {
-      // 6 bytes: "\u", followed by a four-byte Unicode escape sequence.
-      len += 6;
-    } else {
-      len++;
-    }
-  }
-  return len;
-}
-
-// Converts `str` into a double-quoted JSON string and escapes all special
-// characters. This is the only JSON encoding we'll need to do, since our claims
-// object contains two strings and a number.
-static char*
-vapid_json_quote(const char* str, size_t strLen) {
-  size_t quotedLen = vapid_json_quoted_length(str, strLen);
-  char* quotedStr = malloc(quotedLen + 1);
-  if (!quotedStr) {
-    return NULL;
-  }
-  char* result = quotedStr;
-  *result++ = '"';
-  for (size_t i = 0; i < strLen; i++) {
-    char escLiteral = vapid_json_escape_literal(str[i]);
-    if (escLiteral) {
-      // Some special characters have escaped literal forms.
-      *result++ = '\\';
-      *result++ = escLiteral;
-    } else if (vapid_json_escape_is_control(str[i])) {
-      // Other control characters need Unicode escape sequences.
-      result += vapid_json_escape_unicode(str[i], result);
-    } else {
-      *result++ = str[i];
-    }
-  }
-  *result++ = '"';
-  quotedStr[quotedLen] = '\0';
-  return quotedStr;
-}
 
 // Builds and returns the signature base string. This is what we'll sign with
 // our private key. The base string is *not* null-terminated.
@@ -121,11 +30,11 @@ vapid_build_signature_base(const char* aud, size_t audLen, uint32_t exp,
   // show how Vapid works with few dependencies, we build our JSON string using
   // `sprintf`. I don't recommend this approach; it's almost always better to
   // use a proper serialization library.
-  quotedAud = vapid_json_quote(aud, audLen);
+  quotedAud = ece_json_quote(aud, audLen);
   if (!quotedAud) {
     goto end;
   }
-  quotedSub = vapid_json_quote(sub, subLen);
+  quotedSub = ece_json_quote(sub, subLen);
   if (!quotedSub) {
     goto end;
   }
@@ -143,6 +52,25 @@ vapid_build_signature_base(const char* aud, size_t audLen, uint32_t exp,
   if (sprintf(payload, "{\"aud\":%s,\"exp\":%" PRIu32 ",\"sub\":%s}", quotedAud,
               exp, quotedSub) <= 0) {
     goto end;
+  }
+
+  ece_json_member_t* members = ece_json_extract_params(payload);
+  assert(members);
+  for (ece_json_member_t* member = members; member; member = member->next) {
+    if (ece_json_member_has_key(member, "aud")) {
+      char* value = ece_json_member_value_to_str(member);
+      printf("json: Audience: %s\n", value);
+      free(value);
+    } else if (ece_json_member_has_key(member, "exp")) {
+      int64_t value = ece_json_member_value_to_int(member);
+      printf("json: Expiry %" PRIi64 "\n", value);
+    } else if (ece_json_member_has_key(member, "sub")) {
+      char* value = ece_json_member_value_to_str(member);
+      printf("json: Subject: %s\n", value);
+      free(value);
+    } else {
+      assert(false);
+    }
   }
 
   // Determine the Base64url-encoded sizes of the header and payload, and

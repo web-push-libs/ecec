@@ -15,6 +15,7 @@ set(ECE_SOURCES
   src/base64url.c
   src/encrypt.c
   src/decrypt.c
+  src/json.c
   src/keys.c
   src/params.c
   src/trailer.c)
