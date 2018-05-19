@@ -26,7 +26,7 @@ typedef struct ece_json_member_s {
 } ece_json_member_t;
 
 ece_json_member_t*
-ece_json_extract_params(const char* json);
+ece_json_extract_params(const char* json, size_t jsonLen);
 
 void
 ece_json_members_free(ece_json_member_t* members);
@@ -34,11 +34,15 @@ ece_json_members_free(ece_json_member_t* members);
 bool
 ece_json_member_has_key(ece_json_member_t* members, const char* key);
 
-char*
-ece_json_member_value_to_str(ece_json_member_t* member);
-
 int64_t
 ece_json_member_value_to_int(ece_json_member_t* member);
+
+bool
+ece_json_member_value_is_ascii(ece_json_member_t* member, const char* expected);
+
+size_t
+ece_json_member_value_into_utf8(ece_json_member_t* member, uint8_t* utf8,
+                                size_t utf8Len);
 
 // Converts `str` into a double-quoted JSON string and escapes all special
 // characters. This is the only JSON encoding we'll need to do, since our claims

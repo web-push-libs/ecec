@@ -15,6 +15,26 @@
 #define VAPID_HEADER "{\"alg\":\"ES256\",\"typ\":\"JWT\"}"
 #define VAPID_HEADER_LENGTH 27
 
+static uint8_t*
+ece_json_member_value_to_utf8(ece_json_member_t* member) {
+  size_t requiredLen = ece_json_member_value_into_utf8(member, NULL, 0);
+  if (!requiredLen) {
+    return NULL;
+  }
+  uint8_t* bytes = calloc(requiredLen + 1, sizeof(uint8_t));
+  if (!bytes) {
+    return NULL;
+  }
+  size_t encodedLen =
+    ece_json_member_value_into_utf8(member, bytes, requiredLen);
+  if (!encodedLen) {
+    free(bytes);
+    return NULL;
+  }
+  bytes[encodedLen] = '\0';
+  return bytes;
+}
+
 // Builds and returns the signature base string. This is what we'll sign with
 // our private key. The base string is *not* null-terminated.
 static char*
@@ -54,18 +74,21 @@ vapid_build_signature_base(const char* aud, size_t audLen, uint32_t exp,
     goto end;
   }
 
-  ece_json_member_t* members = ece_json_extract_params(payload);
+  ece_json_member_t* members =
+    ece_json_extract_params(payload, (size_t) payloadLen);
   assert(members);
   for (ece_json_member_t* member = members; member; member = member->next) {
     if (ece_json_member_has_key(member, "aud")) {
-      char* value = ece_json_member_value_to_str(member);
+      uint8_t* value = ece_json_member_value_to_utf8(member);
+      assert(value);
       printf("json: Audience: %s\n", value);
       free(value);
     } else if (ece_json_member_has_key(member, "exp")) {
       int64_t value = ece_json_member_value_to_int(member);
       printf("json: Expiry %" PRIi64 "\n", value);
     } else if (ece_json_member_has_key(member, "sub")) {
-      char* value = ece_json_member_value_to_str(member);
+      uint8_t* value = ece_json_member_value_to_utf8(member);
+      assert(value);
       printf("json: Subject: %s\n", value);
       free(value);
     } else {

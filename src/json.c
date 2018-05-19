@@ -1,4 +1,5 @@
 #include "ece/json.h"
+#include "ece.h"
 
 // This file implements signing and verification for VAPID JWTs. The parser
 // supports just enough of the JSON grammar to extract the `aud`, `exp`, and
@@ -28,6 +29,17 @@
 
 // Maps bytes to their hexadecimal representations.
 static const char ece_hex_encode_table[] = "0123456789abcdef";
+
+// Maps hex characters to their byte values. Invalid characters map to 0;
+// since we only use this to decode Unicode escape sequences in JSON strings,
+// which we validate during parsing, we don't need a sentinel.
+static const uint8_t ece_hex_decode_table[] = {
+  0,  0,  0,  0,  0,  0, 0, 0, 0, 0,  0,  0,  0,  0,  0,  0, 0, 0, 0, 0, 0, 0,
+  0,  0,  0,  0,  0,  0, 0, 0, 0, 0,  0,  0,  0,  0,  0,  0, 0, 0, 0, 0, 0, 0,
+  0,  0,  0,  0,  0,  1, 2, 3, 4, 5,  6,  7,  8,  9,  0,  0, 0, 0, 0, 0, 0, 10,
+  11, 12, 13, 14, 15, 0, 0, 0, 0, 0,  0,  0,  0,  0,  0,  0, 0, 0, 0, 0, 0, 0,
+  0,  0,  0,  0,  0,  0, 0, 0, 0, 10, 11, 12, 13, 14, 15, 0, 0, 0, 0, 0, 0, 0,
+  0,  0,  0,  0,  0,  0, 0, 0, 0, 0,  0,  0,  0,  0,  0,  0, 0};
 
 // Indicates whether `c` is an ASCII control character that must be escaped to
 // appear in a JSON string.
@@ -183,39 +195,185 @@ ece_json_members_free(ece_json_member_t* members) {
 
 // Indicates if a `member` has the given `key`.
 bool
-ece_json_member_has_key(ece_json_member_t* members, const char* key) {
-  return !strncmp(members->key, key, members->keyLen);
+ece_json_member_has_key(ece_json_member_t* member, const char* key) {
+  return !strncmp(member->key, key, member->keyLen);
 }
 
-// Copies a `member`'s value into a C string, reviving escaped characters.
-char*
-ece_json_member_value_to_str(ece_json_member_t* member) {
-  char* result = malloc(member->valueLen + 1);
-  if (!result) {
-    return NULL;
+// Converts an ASCII character `c` to upper case. This is like the
+// built-in `toupper` function, but not locale-dependent.
+static inline char
+ece_ascii_toupper(char c) {
+  return c >= 'a' && c <= 'z' ? c - ('a' - 'A') : c;
+}
+
+// Indicates if a `member`'s value is a case-insensitive match for the given
+// `ascii` string. This is useful when matching against string literals that
+// don't contain escape sequences.
+bool
+ece_json_member_value_matches_ascii(ece_json_member_t* member,
+                                    const char* ascii) {
+  const char* valueBegin = member->value;
+  const char* valueEnd = valueBegin + member->valueLen;
+  while (valueBegin < valueEnd) {
+    if (ece_ascii_toupper(*valueBegin) != ece_ascii_toupper(*ascii)) {
+      return false;
+    }
+    valueBegin++;
+    ascii++;
   }
-  char* beginResult = result;
-  const char* beginValue = member->value;
-  const char* endValue = beginValue + member->valueLen;
-  while (beginValue < endValue) {
-    if (*beginValue == '\\') {
-      char unescapedChar = ece_json_unescape_literal(beginValue[1]);
+  return true;
+}
+
+// Decodes a four-hexdigit sequence into a Unicode code point. Assumes that
+// `str` is at least four bytes, and contains valid hexdigits.
+static inline uint32_t
+ece_json_decode_code_point(const char* str) {
+  uint32_t codePoint = 0;
+  for (size_t i = 0; i < 4; i++) {
+    codePoint <<= 4;
+    codePoint |= (uint32_t) ece_hex_decode_table[str[i] & 0x7f];
+  }
+  return codePoint;
+}
+
+// Extracts a Unicode `codePoint` from a UTF-16 escape sequence at the beginning
+// of `str`. Returns the number of bytes read from `str`, including escape
+// characters.
+static size_t
+ece_json_unescape_unicode(const char* str, ptrdiff_t strLen,
+                          uint32_t* codePoint) {
+  if (strLen < 6 || str[0] != '\\' || str[1] != 'u') {
+    // Coding error: we should only pass strings with leading escape sequences
+    // to this function.
+    assert(false);
+    return 0;
+  }
+  uint32_t highSurrogate = ece_json_decode_code_point(&str[2]);
+  if (highSurrogate >= 0xd800 && highSurrogate <= 0xdbff) {
+    // [U+D800, U+DBFF] is a high surrogate in a UTF-16 surrogate pair, so
+    // we need to decode a low surrogate next.
+    if (strLen < 12 || (str[6] != '\\' && str[7] != 'u')) {
+      // Missing low surrogate.
+      return 0;
+    }
+    uint32_t lowSurrogate = ece_json_decode_code_point(&str[8]);
+    if (lowSurrogate >= 0xdc00 && lowSurrogate <= 0xdfff) {
+      // [U+DC00, U+DFFF] is a low surrogate. The Wikipedia entry for
+      // UTF-16 explains how to decode a UTF-16 surrogate pair into a
+      // code point.
+      *codePoint =
+        ((highSurrogate - 0xd800) * 0x400) + (lowSurrogate - 0xdc00) + 0x10000;
+      return 12;
+    }
+    // Anything else is an invalid low surrogate.
+    return 0;
+  } else if (highSurrogate >= 0xdc00 && highSurrogate <= 0xdfff) {
+    // A low surrogate can't appear by itself, or before a high surrogate.
+    return 0;
+  }
+  *codePoint = highSurrogate;
+  return 6;
+}
+
+// Calculates the UTF-8-encoded length of the `member`'s value.
+static size_t
+ece_json_member_value_utf8_size(ece_json_member_t* member) {
+  size_t len = 0;
+  const char* valueBegin = member->value;
+  const char* valueEnd = valueBegin + member->valueLen;
+  while (valueBegin < valueEnd) {
+    if (valueBegin[0] == '\\') {
+      char unescapedChar = ece_json_unescape_literal(valueBegin[1]);
       if (unescapedChar) {
-        *beginResult++ = unescapedChar;
-        beginValue += 2;
+        len++;
+        valueBegin += 2;
         continue;
       }
-      if (beginValue[1] == 'u') {
-        // TODO: Support Unicode escape sequences.
-        assert(false);
-        free(result);
-        return NULL;
+      if (valueBegin[1] == 'u') {
+        uint32_t codePoint = 0;
+        size_t escapedLen = ece_json_unescape_unicode(
+          valueBegin, valueEnd - valueBegin, &codePoint);
+        if (!escapedLen) {
+          return 0;
+        }
+        assert(codePoint >= 0 && codePoint <= 0x10ffff);
+        valueBegin += escapedLen;
+        if (codePoint < 0x80) {
+          len++;
+        } else if (codePoint < 0x800) {
+          len += 2;
+        } else if (codePoint < 0xffff) {
+          len += 3;
+        } else {
+          len += 4;
+        }
+        continue;
       }
+      // Coding error: the parser should catch invalid escape sequences.
+      assert(false);
+      return 0;
     }
-    *beginResult++ = *beginValue++;
+    len++;
+    valueBegin++;
   }
-  *beginResult = '\0';
-  return result;
+  return len;
+}
+
+// Converts a `member`'s value into a UTF-8-encoded string.
+size_t
+ece_json_member_value_into_utf8(ece_json_member_t* member, uint8_t* utf8,
+                                size_t utf8Len) {
+  size_t requiredLen = ece_json_member_value_utf8_size(member);
+  if (!utf8Len) {
+    return requiredLen;
+  }
+  if (utf8Len < requiredLen) {
+    return 0;
+  }
+  const char* valueBegin = member->value;
+  const char* valueEnd = valueBegin + member->valueLen;
+  while (valueBegin < valueEnd) {
+    if (valueBegin[0] == '\\') {
+      char unescapedChar = ece_json_unescape_literal(valueBegin[1]);
+      if (unescapedChar) {
+        *utf8++ = unescapedChar & 0x7f;
+        valueBegin += 2;
+        continue;
+      }
+      if (valueBegin[1] == 'u') {
+        uint32_t codePoint = 0;
+        size_t escapedLen = ece_json_unescape_unicode(
+          valueBegin, valueEnd - valueBegin, &codePoint);
+        if (!escapedLen) {
+          return 0;
+        }
+        assert(codePoint >= 0 && codePoint <= 0x10ffff);
+        valueBegin += escapedLen;
+        if (codePoint < 0x80) {
+          *utf8++ = codePoint & 0xff;
+        } else if (codePoint < 0x800) {
+          *utf8++ = ((codePoint >> 6) | 0xc0) & 0xff;
+          *utf8++ = (codePoint & 0x3f) | 0x80;
+        } else if (codePoint < 0xffff) {
+          *utf8++ = ((codePoint >> 12) | 0xe0) & 0xff;
+          *utf8++ = (((codePoint >> 6) & 0x3f) | 0x80) & 0xff;
+          *utf8++ = (codePoint & 0x3f) | 0x80;
+        } else {
+          *utf8++ = ((codePoint >> 18) | 0xf0) & 0xff;
+          *utf8++ = (((codePoint >> 12) & 0x3f) | 0x80) & 0xff;
+          *utf8++ = (((codePoint >> 6) & 0x3f) | 0x80) & 0xff;
+          *utf8++ = (codePoint & 0x3f) | 0x80;
+        }
+        continue;
+      }
+      // Coding error: the parser should catch invalid escape sequences.
+      assert(false);
+      return 0;
+    }
+    *utf8++ = (uint8_t) *valueBegin;
+    valueBegin++;
+  }
+  return requiredLen;
 }
 
 // Converts a `member`'s value into an integer.
@@ -255,8 +413,8 @@ ece_json_is_valid_key(char c) {
 // Indicates if `c` is a hexdigit.
 static inline bool
 ece_json_is_hex(char c) {
-  return c >= '0' && c <= '9' &&
-         ((c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f'));
+  return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') ||
+         (c >= 'a' && c <= 'f');
 }
 
 // Indicates if `c` can be preceded by a `\` in a JSON string.
@@ -442,13 +600,14 @@ ece_json_parse(ece_json_parser_t* parser, const char* input) {
 }
 
 ece_json_member_t*
-ece_json_extract_params(const char* json) {
+ece_json_extract_params(const char* json, size_t jsonLen) {
   ece_json_parser_t parser;
   parser.state = ECE_JSON_STATE_BEGIN_OBJECT;
   parser.members = NULL;
 
   const char* input = json;
-  while (*input) {
+  const char* inputEnd = json + jsonLen;
+  while (input < inputEnd) {
     if (ece_json_parse(&parser, input)) {
       input++;
     }
