@@ -40,7 +40,7 @@ Project maintainers who do not follow or enforce the Code of Conduct in good fai
 
 ## Project Maintainers
 
-* [Kit Cambridge](mailto:kit@mozilla.com)
+* [Lina Cambridge](mailto:lina@mozilla.com)
 
 ## Attribution
 
