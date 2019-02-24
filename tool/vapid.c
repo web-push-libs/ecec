@@ -265,9 +265,9 @@ end:
 
 static EC_KEY*
 vapid_import_private_key(const char* b64PrivKeyPemFormat) {
-  size_t pv_key_len = strlen(b64PrivKey);
+  size_t pv_key_len = strlen(b64PrivKeyPemFormat);
   BIO *mem = BIO_new(BIO_s_mem());
-  if ((size_t)BIO_write(mem, b64PrivKey, pv_key_len) != pv_key_len) {
+  if ((size_t)BIO_write(mem, b64PrivKeyPemFormat, pv_key_len) != pv_key_len) {
     return NULL;
   }
   
