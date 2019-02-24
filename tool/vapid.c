@@ -6,6 +6,7 @@
 #include <openssl/ec.h>
 #include <openssl/obj_mac.h>
 #include <openssl/sha.h>
+#include <openssl/pem.h>
 
 #include <ece.h>
 #include <ece/keys.h>
@@ -263,8 +264,24 @@ end:
 }
 
 static EC_KEY*
-vapid_import_private_key(const char* b64PrivKey) {
-  return NULL;
+vapid_import_private_key(const char* b64PrivKeyPemFormat) {
+  size_t pv_key_len = strlen(b64PrivKeyPemFormat);
+  BIO *mem = BIO_new(BIO_s_mem());
+  if ((size_t)BIO_write(mem, b64PrivKeyPemFormat, pv_key_len) != pv_key_len) {
+    return NULL;
+  }
+  
+  EC_KEY *EC_KEY_ptr =  PEM_read_bio_ECPrivateKey(mem , NULL, NULL, NULL);
+  BIO_free_all(mem);
+  if(EC_KEY_ptr == NULL) {
+    BIO_free_all(mem);
+    return NULL;
+  }
+
+   if(EC_KEY_check_key(EC_KEY_ptr) == 0) {
+      return NULL;
+   }
+  return EC_KEY_ptr;
 }
 
 static EC_KEY*
