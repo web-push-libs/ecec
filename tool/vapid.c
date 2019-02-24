@@ -273,13 +273,12 @@ vapid_import_private_key(const char* b64PrivKeyPemFormat) {
   
   EC_KEY *EC_KEY_ptr =  PEM_read_bio_ECPrivateKey(mem , NULL, NULL, NULL);
   BIO_free_all(mem);
-  if(EC_KEY_ptr == NULL)
-  {
+  if(EC_KEY_ptr == NULL) {
+    BIO_free_all(mem);
     return NULL;
   }
 
-   if(EC_KEY_check_key(EC_KEY_ptr) == 0)
-   {
+   if(EC_KEY_check_key(EC_KEY_ptr) == 0) {
       return NULL;
    }
   return EC_KEY_ptr;
